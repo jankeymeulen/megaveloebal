@@ -6,25 +6,31 @@
  * Runs in the morning (08:00 Brussels time).
  * Fetches today's matches, posts WhatsApp polls, and writes them to the Games sheet.
  */
-function morningJob() {
+function morningJob(dateStr) {
   var chatId = getConfig('WHATSAPP_GROUP_ID');
   if (!chatId) {
     Logger.log('Error: WHATSAPP_GROUP_ID is not configured.');
     return;
   }
 
-  Logger.log('Starting morningJob...');
+  var targetDateStr = dateStr || Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
+  Logger.log('Starting morningJob for date ' + targetDateStr + '...');
+  
   var todayMatches = [];
   try {
-    todayMatches = fetchTodayMatches();
+    var allMatches = fetchAllWorldCupMatches();
+    todayMatches = allMatches.filter(function(match) {
+      var matchDateStr = Utilities.formatDate(new Date(match.utcDate), "Europe/Brussels", "yyyy-MM-dd");
+      return matchDateStr === targetDateStr;
+    });
   } catch (e) {
-    Logger.log('Error fetching today\'s matches: ' + e.toString());
-    sendWhatsAppMessage(chatId, '⚠️ Error fetching today\'s matches from Football-Data.org API. Standby!');
+    Logger.log('Error fetching matches for date ' + targetDateStr + ': ' + e.toString());
+    sendWhatsAppMessage(chatId, '⚠️ Error fetching matches from Football-Data.org API. Standby!');
     return;
   }
 
   if (todayMatches.length === 0) {
-    Logger.log('No matches scheduled for today.');
+    Logger.log('No matches scheduled for date: ' + targetDateStr);
     return;
   }
 
@@ -37,7 +43,7 @@ function morningJob() {
 
   // Post intro message
   var introText = "⚽ *WK MEGAVELO EBAL: TODAY'S GAMES* ⚽\n\n" +
-                  "Good morning! Here are the betting polls for today's matches. " +
+                  "Good morning! Here are the betting polls for matches of " + targetDateStr + ". " +
                   "You have until *16:00 Brussels time* to vote. " +
                   "Make your choice below!";
   sendWhatsAppMessage(chatId, introText);
@@ -89,31 +95,36 @@ function morningJob() {
 
   // Save games in database
   saveGames(gamesToSave);
-  Logger.log('morningJob finished. Registered ' + gamesToSave.length + ' games.');
+  Logger.log('morningJob finished. Registered ' + gamesToSave.length + ' games for ' + targetDateStr + '.');
 }
 
 /**
  * Runs at the deadline (16:00 Brussels time).
  * Collects votes, records bets, deletes the polls, and posts a bet summary.
  */
-function deadlineJob() {
+function deadlineJob(dateStr) {
   var chatId = getConfig('WHATSAPP_GROUP_ID');
   if (!chatId) {
     Logger.log('Error: WHATSAPP_GROUP_ID is not configured.');
     return;
   }
 
-  Logger.log('Starting deadlineJob...');
+  var targetDateStr = dateStr || Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
+  Logger.log('Starting deadlineJob for date ' + targetDateStr + '...');
+  
   var games = getGames();
   var players = getPlayers();
   
-  // Find today's games that have polls and are not yet settled
+  // Find active games that have polls and are not yet settled, filtering by date if specified
   var activeGames = games.filter(function(g) {
-    return g.pollMessageId && !g.settled;
+    if (!g.pollMessageId || g.settled) return false;
+    
+    var gameDateStr = Utilities.formatDate(new Date(g.dateTime), "Europe/Brussels", "yyyy-MM-dd");
+    return gameDateStr === targetDateStr;
   });
 
   if (activeGames.length === 0) {
-    Logger.log('No active game polls to close.');
+    Logger.log('No active game polls to close for ' + targetDateStr + '.');
     return;
   }
 
@@ -211,7 +222,7 @@ function deadlineJob() {
 
   // Send summary to WhatsApp
   sendWhatsAppMessage(chatId, summaryText);
-  Logger.log('deadlineJob finished. Logged bets.');
+  Logger.log('deadlineJob finished. Logged bets for ' + targetDateStr + '.');
 }
 
 /**

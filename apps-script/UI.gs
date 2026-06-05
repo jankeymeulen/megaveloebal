@@ -12,6 +12,9 @@ function onOpen() {
     .addItem('Run deadline close & collect (16:00)', 'menuDeadlineJob')
     .addItem('Run settlement check (scores)', 'menuSettlementJob')
     .addSeparator()
+    .addItem('Fetch matches for custom date...', 'menuMorningJobCustomDate')
+    .addItem('Close polls for custom date...', 'menuDeadlineJobCustomDate')
+    .addSeparator()
     .addItem('Initialize daily triggers', 'menuSetupTriggers')
     .addSeparator()
     .addItem('List WhatsApp JIDs / Chat IDs', 'menuListChats')
@@ -233,5 +236,53 @@ function menuRunInteractiveTest() {
     }
   } catch (e) {
     ui.alert('Test Error', 'An error occurred during testing: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Prompts for a date and runs morning poll setup for that custom date.
+ */
+function menuMorningJobCustomDate() {
+  var ui = SpreadsheetApp.getUi();
+  var prompt = ui.prompt('Custom Date Poll Setup', 'Enter date in YYYY-MM-DD format (e.g. 2026-06-12):', ui.ButtonSet.OK_CANCEL);
+  if (prompt.getSelectedButton() !== ui.Button.OK) return;
+  var dateStr = prompt.getResponseText().trim();
+  
+  var regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateStr)) {
+    ui.alert('Invalid Format', 'Please enter the date in YYYY-MM-DD format.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  ui.showModalDialog(HtmlService.createHtmlOutput('Fetching matches and sending polls for ' + dateStr + '... Please wait.'), 'Working');
+  try {
+    morningJob(dateStr);
+    ui.alert('Success', 'Morning job for ' + dateStr + ' executed successfully.', ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Execution failed: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Prompts for a date and runs deadline vote collection for that custom date.
+ */
+function menuDeadlineJobCustomDate() {
+  var ui = SpreadsheetApp.getUi();
+  var prompt = ui.prompt('Custom Date Poll Collection', 'Enter date in YYYY-MM-DD format (e.g. 2026-06-12):', ui.ButtonSet.OK_CANCEL);
+  if (prompt.getSelectedButton() !== ui.Button.OK) return;
+  var dateStr = prompt.getResponseText().trim();
+  
+  var regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateStr)) {
+    ui.alert('Invalid Format', 'Please enter the date in YYYY-MM-DD format.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  ui.showModalDialog(HtmlService.createHtmlOutput('Collecting votes and closing polls for ' + dateStr + '... Please wait.'), 'Working');
+  try {
+    deadlineJob(dateStr);
+    ui.alert('Success', 'Deadline job for ' + dateStr + ' executed successfully.', ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Execution failed: ' + e.toString(), ui.ButtonSet.OK);
   }
 }
