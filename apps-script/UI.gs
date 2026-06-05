@@ -17,6 +17,7 @@ function onOpen() {
     .addItem('List WhatsApp JIDs / Chat IDs', 'menuListChats')
     .addItem('Send test poll to specific JID', 'menuSendTestPoll')
     .addItem('Send test message to specific JID', 'menuSendTestMessage')
+    .addItem('Run interactive end-to-end test', 'menuRunInteractiveTest')
     .addToUi();
 }
 
@@ -168,5 +169,69 @@ function menuSendTestMessage() {
     ui.alert('Success', 'Test message sent. Message ID:\n' + msgId, ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Error', 'Failed to send message: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Runs an interactive, blocking end-to-end test to verify poll sending, vote retrieval,
+ * poll deletion, and summary dispatch using existing codepaths.
+ */
+function menuRunInteractiveTest() {
+  var ui = SpreadsheetApp.getUi();
+  var defaultJid = getConfig('WHATSAPP_GROUP_ID') || '';
+  
+  var jidPrompt = ui.prompt('Interactive E2E Test', 'Enter WhatsApp JID for testing (e.g. 1203630248382@g.us):', ui.ButtonSet.OK_CANCEL);
+  if (jidPrompt.getSelectedButton() !== ui.Button.OK) return;
+  var targetJid = jidPrompt.getResponseText().trim();
+  if (!targetJid) {
+    ui.alert('Error', 'JID cannot be empty.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  try {
+    // 1. Send test poll using standard codepath
+    var pollTitle = "🧪 E2E Test Poll: Pizza vs Burgers";
+    var options = ["Pizza 🍕", "Burgers 🍔"];
+    var pollMessageId = sendWhatsAppPoll(targetJid, pollTitle, options);
+    
+    // Show a blocking alert that pauses Apps Script execution until user votes on phone
+    var instructionResponse = ui.alert(
+      'Test Poll Sent!', 
+      'A test poll has been sent to the chat.\n\n' +
+      '1. Open your WhatsApp and vote on the poll.\n' +
+      '2. Once you have voted, return here and click YES to pull the votes, delete the poll, and send a summary.\n\n' +
+      'Do you want to continue and collect votes?', 
+      ui.ButtonSet.YES_NO
+    );
+    
+    if (instructionResponse === ui.Button.YES) {
+      // 2. Fetch votes using standard codepath
+      var votes = fetchPollVotes(targetJid, pollMessageId);
+      
+      // 3. Delete poll using standard codepath
+      deleteWhatsAppMessage(targetJid, pollMessageId);
+      
+      // 4. Send summary using standard codepath
+      var summaryText = "🧪 *E2E TEST RESULT: SUMMARY* 🧪\n\n" +
+                        "The test poll has been closed and deleted.\n\n" +
+                        "Here are the votes collected:\n";
+      
+      if (votes.length === 0) {
+        summaryText += "_No votes were cast!_";
+      } else {
+        votes.forEach(function(v) {
+          summaryText += "• *" + v.voter + "* voted for *" + v.selectedOptionName + "*\n";
+        });
+      }
+      
+      sendWhatsAppMessage(targetJid, summaryText);
+      ui.alert('Test Finished', 'Votes were collected, the poll was deleted, and the summary was posted in WhatsApp!', ui.ButtonSet.OK);
+    } else {
+      // User canceled, still delete the poll to clean up
+      deleteWhatsAppMessage(targetJid, pollMessageId);
+      ui.alert('Test Canceled', 'Test canceled. The poll was deleted to clean up.', ui.ButtonSet.OK);
+    }
+  } catch (e) {
+    ui.alert('Test Error', 'An error occurred during testing: ' + e.toString(), ui.ButtonSet.OK);
   }
 }
