@@ -32,14 +32,20 @@ const authenticate = (req, res, next) => {
 let qrCodeData = null;
 let clientStatus = 'DISCONNECTED'; // DISCONNECTED, WAITING_FOR_QR, CONNECTED
 
+const puppeteerOptions = {
+  headless: true,
+  args: ['--no-sandbox', '--disable-setuid-sandbox']
+};
+
+if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+  puppeteerOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+}
+
 const client = new Client({
   authStrategy: new LocalAuth({
     dataPath: './.wwebjs_auth'
   }),
-  puppeteer: {
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  }
+  puppeteer: puppeteerOptions
 });
 
 client.on('qr', (qr) => {
@@ -132,7 +138,7 @@ app.get('/qr', (req, res) => {
 });
 
 // Secured endpoints
-app.get('/chats', authenticate, async (req, res) => {
+app.post('/chats', authenticate, async (req, res) => {
   try {
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
