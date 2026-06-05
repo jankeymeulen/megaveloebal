@@ -48,7 +48,7 @@ function morningJob(dateStr) {
   var introText = "⚽ *MEGAVELOEBAL: WEDSTRIJDEN VANDAAG* ⚽\n\n" +
                   "Goeiemorgen! Wedstrijden van " + targetDateStr + ". " +
                   "Deadline is om *17:00*, " +
-                  "inzet is *" + betCost + "* miljoen.".
+                  "inzet is *" + betCost + "* miljoen." +
                   "Faites votre jeu!!";
   sendWhatsAppMessage(chatId, introText);
 
