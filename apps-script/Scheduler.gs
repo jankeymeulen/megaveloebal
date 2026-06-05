@@ -45,10 +45,11 @@ function morningJob(dateStr) {
   });
 
   // Post intro message
-  var introText = "⚽ *WK MEGAVELO EBAL: TODAY'S GAMES* ⚽\n\n" +
-                  "Good morning! Here are the betting polls for matches of " + targetDateStr + ". " +
-                  "You have until *17:00 Brussels time* today to vote. " +
-                  "Make your choice below!";
+  var introText = "⚽ *MEGAVELOEBAL: WEDSTRIJDEN VANDAAG* ⚽\n\n" +
+                  "Goeiemorgen! Wedstrijden van " + targetDateStr + ". " +
+                  "Deadline is om *17:00*, " +
+                  "inzet is *" + betCost + "* miljoen.".
+                  "Faites votre jeu!!";
   sendWhatsAppMessage(chatId, introText);
 
   // Send a poll for each match
@@ -64,7 +65,7 @@ function morningJob(dateStr) {
       options.push('Draw');
     }
 
-    var pollTitle = homeTeam + " vs " + awayTeam + " (" + betCost + " coin" + (betCost > 1 ? "s" : "") + ")";
+    var pollTitle = homeTeam + " - " + awayTeam;
     
     var pollMessageId = '';
     try {
@@ -209,13 +210,13 @@ function deadlineJob(dateStr) {
     }
 
     // Build this game's summary block
-    summaryText += "*" + game.homeTeam + " vs " + game.awayTeam + "*\n" +
+    summaryText += "*" + game.homeTeam + " - " + game.awayTeam + "*\n" +
                    "• " + game.homeTeam + ": " + (homeVotes.length > 0 ? homeVotes.join(', ') : "_None_") + "\n" +
                    "• " + game.awayTeam + ": " + (awayVotes.length > 0 ? awayVotes.join(', ') : "_None_") + "\n";
     if (game.stage === 'GROUP_STAGE') {
       summaryText += "• Draw: " + (drawVotes.length > 0 ? drawVotes.join(', ') : "_None_") + "\n";
     }
-    summaryText += "• No vote (lost " + game.betCost + " coin" + (game.betCost > 1 ? "s" : "") + "): " + 
+    summaryText += "• Blanco: " + 
                    (noVotes.length > 0 ? noVotes.join(', ') : "_None_") + "\n\n";
 
     // Clear pollMessageId in games list so it doesn't trigger again
