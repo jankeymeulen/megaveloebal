@@ -16,12 +16,15 @@ function morningJob(dateStr) {
   var targetDateStr = dateStr || Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
   Logger.log('Starting morningJob for date ' + targetDateStr + '...');
   
+  var window = getMatchWindowForDate(targetDateStr);
+  Logger.log('Match window: ' + window.start.toString() + ' to ' + window.end.toString());
+
   var todayMatches = [];
   try {
     var allMatches = fetchAllWorldCupMatches();
     todayMatches = allMatches.filter(function(match) {
-      var matchDateStr = Utilities.formatDate(new Date(match.utcDate), "Europe/Brussels", "yyyy-MM-dd");
-      return matchDateStr === targetDateStr;
+      var matchDate = new Date(match.utcDate);
+      return matchDate >= window.start && matchDate < window.end;
     });
   } catch (e) {
     Logger.log('Error fetching matches for date ' + targetDateStr + ': ' + e.toString());
@@ -30,7 +33,7 @@ function morningJob(dateStr) {
   }
 
   if (todayMatches.length === 0) {
-    Logger.log('No matches scheduled for date: ' + targetDateStr);
+    Logger.log('No matches scheduled in window for: ' + targetDateStr);
     return;
   }
 
@@ -44,7 +47,7 @@ function morningJob(dateStr) {
   // Post intro message
   var introText = "⚽ *WK MEGAVELO EBAL: TODAY'S GAMES* ⚽\n\n" +
                   "Good morning! Here are the betting polls for matches of " + targetDateStr + ". " +
-                  "You have until *16:00 Brussels time* to vote. " +
+                  "You have until *17:00 Brussels time* today to vote. " +
                   "Make your choice below!";
   sendWhatsAppMessage(chatId, introText);
 
@@ -112,19 +115,22 @@ function deadlineJob(dateStr) {
   var targetDateStr = dateStr || Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
   Logger.log('Starting deadlineJob for date ' + targetDateStr + '...');
   
+  var window = getMatchWindowForDate(targetDateStr);
+  Logger.log('Closing window: ' + window.start.toString() + ' to ' + window.end.toString());
+
   var games = getGames();
   var players = getPlayers();
   
-  // Find active games that have polls and are not yet settled, filtering by date if specified
+  // Find active games that have polls and are not yet settled, filtering by date window
   var activeGames = games.filter(function(g) {
     if (!g.pollMessageId || g.settled) return false;
     
-    var gameDateStr = Utilities.formatDate(new Date(g.dateTime), "Europe/Brussels", "yyyy-MM-dd");
-    return gameDateStr === targetDateStr;
+    var gameDate = new Date(g.dateTime);
+    return gameDate >= window.start && gameDate < window.end;
   });
 
   if (activeGames.length === 0) {
-    Logger.log('No active game polls to close for ' + targetDateStr + '.');
+    Logger.log('No active game polls to close in window for ' + targetDateStr + '.');
     return;
   }
 
@@ -344,7 +350,7 @@ function settlementJob() {
 
 /**
  * Configures the Google Apps Script project triggers programmatically.
- * Clears old triggers and schedules morningJob (08:00) and deadlineJob (16:00).
+ * Clears old triggers and schedules morningJob (09:00) and deadlineJob (17:00).
  */
 function setupDailyTriggers() {
   // Clear any existing triggers
@@ -354,7 +360,7 @@ function setupDailyTriggers() {
   });
 
   // 1. Create a daily recurring trigger that runs early in the morning (e.g. 5:00 - 6:00 AM)
-  // This trigger's job is to schedule the *exact* one-time execution timestamps for 08:00 and 16:00.
+  // This trigger's job is to schedule the *exact* one-time execution timestamps for 09:00 and 17:00.
   ScriptApp.newTrigger('scheduleExactTriggersForToday')
     .timeBased()
     .everyDays(1)
@@ -372,7 +378,7 @@ function setupDailyTriggers() {
 }
 
 /**
- * Calculates exact millisecond dates for 08:00 and 16:00 Brussels time
+ * Calculates exact millisecond dates for 09:00 and 17:00 Brussels time
  * and schedules one-time triggers for them.
  */
 function scheduleExactTriggersForToday() {
@@ -388,16 +394,16 @@ function scheduleExactTriggersForToday() {
   var timezone = "Europe/Brussels";
   var now = new Date();
   
-  // Calculate today at 08:00:00 Brussels
-  var morningStr = Utilities.formatDate(now, timezone, "yyyy-MM-dd'T'08:00:00");
+  // Calculate today at 09:00:00 Brussels
+  var morningStr = Utilities.formatDate(now, timezone, "yyyy-MM-dd'T'09:00:00");
   var morningDate = parseDateString(morningStr);
   if (morningDate.getTime() < now.getTime()) {
     // If it has passed already today, schedule for tomorrow
     morningDate.setDate(morningDate.getDate() + 1);
   }
   
-  // Calculate today at 16:00:00 Brussels
-  var deadlineStr = Utilities.formatDate(now, timezone, "yyyy-MM-dd'T'16:00:00");
+  // Calculate today at 17:00:00 Brussels
+  var deadlineStr = Utilities.formatDate(now, timezone, "yyyy-MM-dd'T'17:00:00");
   var deadlineDate = parseDateString(deadlineStr);
   if (deadlineDate.getTime() < now.getTime()) {
     deadlineDate.setDate(deadlineDate.getDate() + 1);
@@ -428,4 +434,30 @@ function parseDateString(str) {
     Number(timeParts[1]),
     Number(timeParts[2])
   );
+}
+
+/**
+ * Calculates the betting match window for a given date.
+ * Matches must start after Day X 17:00 Brussels and before Day X+1 09:00 Brussels.
+ * @param {string} targetDateStr Date string "YYYY-MM-DD" (Europe/Brussels)
+ * @returns {Object} { start: Date, end: Date }
+ */
+function getMatchWindowForDate(targetDateStr) {
+  var parts = targetDateStr.split('-');
+  var year = Number(parts[0]);
+  var month = Number(parts[1]) - 1;
+  var day = Number(parts[2]);
+  
+  // Start: Day X at 17:00:00 Brussels time
+  var windowStart = new Date(year, month, day, 17, 0, 0);
+  
+  // End: Day X+1 at 09:00:00 Brussels time
+  var nextDay = new Date(year, month, day, 17, 0, 0);
+  nextDay.setDate(nextDay.getDate() + 1);
+  var windowEnd = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), 9, 0, 0);
+  
+  return {
+    start: windowStart,
+    end: windowEnd
+  };
 }

@@ -67,7 +67,7 @@ function menuSetupTriggers() {
   if (response === ui.Button.YES) {
     try {
       setupDailyTriggers();
-      ui.alert('Success', 'Triggers initialized. System will run morning job at 08:00 Brussels time and deadline job at 16:00 Brussels time daily.', ui.ButtonSet.OK);
+      ui.alert('Success', 'Triggers initialized. System will run morning job at 09:00 Brussels time and deadline job at 17:00 Brussels time daily.', ui.ButtonSet.OK);
     } catch (e) {
       ui.alert('Error', 'Execution failed: ' + e.toString(), ui.ButtonSet.OK);
     }

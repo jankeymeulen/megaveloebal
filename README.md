@@ -40,7 +40,7 @@ Used for game configurations. Keep it simple; the script will initialize or read
 
 ### 4. `Bets`
 * Columns: `Game ID` | `Player Name` | `WhatsApp ID` | `Bet Option` | `Coins Bet` | `Winnings` | `Result` | `Settled`
-* *(No rows needed; Apps Script will populate this at 16:00 daily)*
+* *(No rows needed; Apps Script will populate this at 17:00 daily)*
 
 ---
 
@@ -56,7 +56,7 @@ Used for game configurations. Keep it simple; the script will initialize or read
    - `Scheduler.gs` (orchestrates daily cron jobs)
    - `UI.gs` (creates the Sheets Custom Menu)
 3. Click the gear icon (**Project Settings** ⚙️) on the left sidebar:
-   - **CRITICAL**: Set the **Time zone** to `(GMT+02:00) Brussels` (or `Europe/Brussels`). The scheduler dates depend on this timezone to calculate 08:00 and 16:00 Brussels time correctly.
+   - **CRITICAL**: Set the **Time zone** to `(GMT+02:00) Brussels` (or `Europe/Brussels`). The scheduler dates depend on this timezone to calculate 09:00 and 17:00 Brussels time correctly.
 4. Save the project.
 5. Close and reopen your Google Sheet. You will now see a new menu in the top bar: **⚽ WC Betting Game**.
 
@@ -111,8 +111,8 @@ Once the server is connected:
 4. Locate the group chat where you want to play the game, copy its JID (e.g. `1203630248382@g.us`), and paste it into the **Config** sheet under `WHATSAPP_GROUP_ID`.
 5. Go to the **⚽ WC Betting Game** menu -> Click **Initialize daily triggers**.
    - This sets up the automatic Apps Script schedules:
-     - Morning Job: Runs at **08:00 Brussels time** (sends today's polls).
-     - Deadline Job: Runs at **16:00 Brussels time** (closes polls, records bets, posts summary).
+     - Morning Job: Runs at **09:00 Brussels time** (sends today's polls).
+     - Deadline Job: Runs at **17:00 Brussels time** (closes polls, records bets, posts summary).
      - Settlement Job: Runs **every 15 minutes** (settles completed matches and updates balances).
 
 ---
@@ -127,11 +127,11 @@ Once the server is connected:
   - `SEMI_FINALS` & `THIRD_PLACE`: **8 coins** per game.
   - `FINAL`: **32 coins** per game.
 - **Polls**:
-  - Posted at **08:00 Brussels time**.
+  - Posted at **09:00 Brussels time**.
   - Group stage polls offer 3 options: **[Home Team, Away Team, Draw]**.
   - Knockout stage polls offer 2 options: **[Home Team, Away Team]** (betting on who progresses).
 - **Deadline**:
-  - Votes close at **16:00 Brussels time**.
+  - Votes close at **17:00 Brussels time**.
   - The poll message is deleted from the group, preventing any further voting.
   - **No-Voters**: Any player who did not vote before the deadline loses their coins for that match (they are deducted from their balance), but their coins **are burned/discarded** and are *not* added to the winning pool.
 - **Settlement**:
@@ -147,8 +147,8 @@ Once the server is connected:
 ## 🧪 Manual Testing Menu Options
 
 If you need to test the setups, use the custom menu options:
-- **Run morning poll setup (08:00)**: Simulates the 08:00 AM run. Instantly retrieves today's games and posts polls to the configured chat.
-- **Run deadline close & collect (16:00)**: Simulates the 04:00 PM deadline. Closes polls, registers the bets, and deletes the poll messages.
+- **Run morning poll setup (09:00)**: Simulates the 09:00 AM run. Instantly retrieves today's games and posts polls to the configured chat.
+- **Run deadline close & collect (17:00)**: Simulates the 05:00 PM deadline. Closes polls, registers the bets, and deletes the poll messages.
 - **Run settlement check (scores)**: Triggers the check for finished games to score them immediately.
 - **Send test poll to specific JID**: Allows you to send a single-choice poll to any phone number or group ID to test layout.
 - **Send test message to specific JID**: Send a text message to a specific number to verify connection.
