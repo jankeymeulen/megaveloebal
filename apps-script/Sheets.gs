@@ -28,15 +28,22 @@ function getOrCreateSheet(name, headers) {
  * Columns: Player Name | WhatsApp ID | Coins Balance
  */
 function getPlayers() {
-  var sheet = getOrCreateSheet(PLAYERS_SHEET_NAME, ['Player Name', 'WhatsApp ID', 'Coins Balance']);
+  var sheet = getOrCreateSheet(PLAYERS_SHEET_NAME, ['Player Name', 'WhatsApp ID', 'Coins Balance', 'Nickname']);
   var data = sheet.getDataRange().getValues();
   var players = [];
   for (var i = 1; i < data.length; i++) {
     if (data[i][0]) {
+      var name = data[i][0].toString().trim();
+      var whatsappId = data[i][1].toString().trim();
+      var balance = Number(data[i][2]) || 0;
+      var nickname = data[i][3] ? data[i][3].toString().trim() : '';
+      
       players.push({
-        name: data[i][0].toString().trim(),
-        whatsappId: data[i][1].toString().trim(),
-        balance: Number(data[i][2]) || 0,
+        name: name,
+        whatsappId: whatsappId,
+        balance: balance,
+        nickname: nickname,
+        displayName: nickname || name, // Fallback to name if nickname is blank
         rowIndex: i + 1 // 1-indexed row number in sheet
       });
     }
@@ -49,7 +56,7 @@ function getPlayers() {
  * @param {Object} balanceUpdates Map of { playerName: absoluteNewBalance }
  */
 function updatePlayerBalances(balanceUpdates) {
-  var sheet = getOrCreateSheet(PLAYERS_SHEET_NAME, ['Player Name', 'WhatsApp ID', 'Coins Balance']);
+  var sheet = getOrCreateSheet(PLAYERS_SHEET_NAME, ['Player Name', 'WhatsApp ID', 'Coins Balance', 'Nickname']);
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     var name = data[i][0].toString().trim();

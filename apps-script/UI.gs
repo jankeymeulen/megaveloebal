@@ -8,12 +8,14 @@
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('⚽ WC Betting Game')
-    .addItem('Run morning poll setup (08:00)', 'menuMorningJob')
-    .addItem('Run deadline close & collect (16:00)', 'menuDeadlineJob')
+    .addItem('Run morning poll setup (09:00)', 'menuMorningJob')
+    .addItem('Run deadline close & collect (17:00)', 'menuDeadlineJob')
     .addItem('Run settlement check (scores)', 'menuSettlementJob')
     .addSeparator()
     .addItem('Fetch matches for custom date...', 'menuMorningJobCustomDate')
     .addItem('Close polls for custom date...', 'menuDeadlineJobCustomDate')
+    .addSeparator()
+    .addItem('Prepopulate players from group chat', 'menuPrepopulatePlayers')
     .addSeparator()
     .addItem('Initialize daily triggers', 'menuSetupTriggers')
     .addSeparator()
@@ -281,5 +283,52 @@ function menuDeadlineJobCustomDate() {
     ui.alert('Success', 'Deadline job for ' + dateStr + ' executed successfully.', ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Error', 'Execution failed: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Automatically fetches all participants from the configured WhatsApp Group JID
+ * and appends them to the Players sheet with a default balance of 125.
+ */
+function menuPrepopulatePlayers() {
+  var ui = SpreadsheetApp.getUi();
+  var chatId = getConfig('WHATSAPP_GROUP_ID');
+  
+  if (!chatId) {
+    ui.alert('Error', 'WHATSAPP_GROUP_ID is not configured in the Config sheet. Please find the JID first.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  var confirm = ui.alert('Prepopulate Players', 'This will fetch all members from group: \n' + chatId + '\nand add new members to the Players sheet. Continue?', ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) return;
+  
+  try {
+    var participants = fetchGroupParticipants(chatId);
+    if (participants.length === 0) {
+      ui.alert('No members found. Make sure the bot is in the group and ready.', ui.ButtonSet.OK);
+      return;
+    }
+    
+    var existingPlayers = getPlayers();
+    var existingMap = {};
+    existingPlayers.forEach(function(p) {
+      existingMap[p.whatsappId.replace(/\s+/g, '')] = true;
+    });
+    
+    var sheet = getOrCreateSheet(PLAYERS_SHEET_NAME, ['Player Name', 'WhatsApp ID', 'Coins Balance', 'Nickname']);
+    var newCount = 0;
+    
+    participants.forEach(function(member) {
+      var normalizedId = member.whatsappId.replace(/\s+/g, '');
+      if (!existingMap.hasOwnProperty(normalizedId)) {
+        // Append row: Player Name | WhatsApp ID | Coins Balance (125) | Nickname
+        sheet.appendRow([member.name, member.whatsappId, 125, '']);
+        newCount++;
+      }
+    });
+    
+    ui.alert('Success', 'Group Scan Complete!\n\n• Found ' + participants.length + ' group members.\n• Appended ' + newCount + ' new players to the Players sheet.', ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Failed to prepopulate players: ' + e.toString(), ui.ButtonSet.OK);
   }
 }

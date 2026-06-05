@@ -96,3 +96,15 @@ function sendWhatsAppMessage(chatId, text) {
   });
   return res.messageId;
 }
+
+/**
+ * Fetches all participants from a group chat.
+ * @param {string} chatId Group JID
+ * @returns {Array<Object>} [{ name: string, whatsappId: string }]
+ */
+function fetchGroupParticipants(chatId) {
+  var res = makeWhatsAppRequest('/group-participants', {
+    chatId: chatId
+  });
+  return res.participants || [];
+}

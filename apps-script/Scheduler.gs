@@ -173,20 +173,20 @@ function deadlineJob(dateStr) {
         // Map option text back to DB value: HOME_WIN, AWAY_WIN, DRAW
         if (option === game.homeTeam) {
           betOption = 'HOME_WIN';
-          homeVotes.push(p.name);
+          homeVotes.push(p.displayName);
         } else if (option === game.awayTeam) {
           betOption = 'AWAY_WIN';
-          awayVotes.push(p.name);
+          awayVotes.push(p.displayName);
         } else if (option === 'Draw') {
           betOption = 'DRAW';
-          drawVotes.push(p.name);
+          drawVotes.push(p.displayName);
         } else {
           // Fallback if formatting differed
           betOption = 'NO_VOTE';
-          noVotes.push(p.name);
+          noVotes.push(p.displayName);
         }
       } else {
-        noVotes.push(p.name);
+        noVotes.push(p.displayName);
       }
 
       betsToSave.push({
@@ -321,9 +321,18 @@ function settlementJob() {
       gamesToUpdate.push(localGame);
 
       // 4. Create and send announcement
-      var winnersList = settlement.betsUpdates.filter(function(b) { return b.result === 'WIN'; }).map(function(b) { return b.playerName; });
-      var losersList = settlement.betsUpdates.filter(function(b) { return b.result === 'LOSE'; }).map(function(b) { return b.playerName; });
-      var noVotersList = settlement.betsUpdates.filter(function(b) { return b.result === 'NO_VOTE'; }).map(function(b) { return b.playerName; });
+      var winnersList = settlement.betsUpdates.filter(function(b) { return b.result === 'WIN'; }).map(function(b) {
+        var p = players.find(function(pl) { return pl.name === b.playerName; });
+        return p ? p.displayName : b.playerName;
+      });
+      var losersList = settlement.betsUpdates.filter(function(b) { return b.result === 'LOSE'; }).map(function(b) {
+        var p = players.find(function(pl) { return pl.name === b.playerName; });
+        return p ? p.displayName : b.playerName;
+      });
+      var noVotersList = settlement.betsUpdates.filter(function(b) { return b.result === 'NO_VOTE'; }).map(function(b) {
+        var p = players.find(function(pl) { return pl.name === b.playerName; });
+        return p ? p.displayName : b.playerName;
+      });
 
       var betCost = getBetCost(localGame.stage);
       var totalLosingPool = losersList.length * betCost;

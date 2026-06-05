@@ -237,6 +237,43 @@ app.post('/get-poll-votes', authenticate, async (req, res) => {
   }
 });
 
+app.post('/group-participants', authenticate, async (req, res) => {
+  const { chatId } = req.body;
+  if (!chatId) {
+    return res.status(400).json({ error: 'Missing chatId' });
+  }
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({ error: 'WhatsApp client is not connected' });
+    }
+    const chat = await client.getChatById(chatId);
+    if (!chat.isGroup) {
+      return res.status(400).json({ error: 'Chat is not a group' });
+    }
+    
+    const participants = chat.participants || [];
+    const list = await Promise.all(participants.map(async (p) => {
+      try {
+        const contact = await client.getContactById(p.id._serialized);
+        return {
+          name: contact.pushname || contact.name || p.id.user,
+          whatsappId: contact.id._serialized
+        };
+      } catch (err) {
+        return {
+          name: p.id.user,
+          whatsappId: p.id._serialized
+        };
+      }
+    }));
+    
+    res.json({ participants: list });
+  } catch (error) {
+    console.error('Error fetching group participants:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/delete-message', authenticate, async (req, res) => {
   const { chatId, messageId } = req.body;
   if (!chatId || !messageId) {

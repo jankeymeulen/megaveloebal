@@ -160,7 +160,7 @@ function generateStandingsText(players) {
     else medal = (index + 1) + ". ";
 
     var formattedBalance = p.balance % 1 === 0 ? p.balance.toFixed(0) : p.balance.toFixed(1);
-    text += medal + "*" + p.name + "*: " + formattedBalance + " coins\n";
+    text += medal + "*" + p.displayName + "*: " + formattedBalance + " coins\n";
   });
   return text;
 }
