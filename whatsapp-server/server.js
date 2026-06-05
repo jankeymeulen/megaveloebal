@@ -240,8 +240,14 @@ app.post('/delete-message', authenticate, async (req, res) => {
     if (!msg) {
       return res.status(404).json({ error: 'Message not found' });
     }
-    // delete(true) will delete for everyone
-    await msg.delete(true);
+    // Try to delete for everyone (revoking)
+    try {
+      await msg.delete(true);
+    } catch (deleteErr) {
+      console.warn('Delete for everyone failed, attempting local deletion (delete for me):', deleteErr.message);
+      // Fallback: delete only for me (necessary in self-chats)
+      await msg.delete(false);
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting message:', error);
