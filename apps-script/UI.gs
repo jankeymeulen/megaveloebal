@@ -28,7 +28,6 @@ function menuMorningJob() {
   var ui = SpreadsheetApp.getUi();
   var response = ui.alert('Run Morning Polls', 'Are you sure you want to fetch today\'s matches and post the polls to the group chat now?', ui.ButtonSet.YES_NO);
   if (response === ui.Button.YES) {
-    ui.showModalDialog(HtmlService.createHtmlOutput('Running morning job... Please wait.'), 'Working');
     try {
       morningJob();
       ui.alert('Success', 'Morning job executed successfully. Check the WhatsApp Group!', ui.ButtonSet.OK);
@@ -254,7 +253,6 @@ function menuMorningJobCustomDate() {
     return;
   }
   
-  ui.showModalDialog(HtmlService.createHtmlOutput('Fetching matches and sending polls for ' + dateStr + '... Please wait.'), 'Working');
   try {
     morningJob(dateStr);
     ui.alert('Success', 'Morning job for ' + dateStr + ' executed successfully.', ui.ButtonSet.OK);
@@ -278,7 +276,6 @@ function menuDeadlineJobCustomDate() {
     return;
   }
   
-  ui.showModalDialog(HtmlService.createHtmlOutput('Collecting votes and closing polls for ' + dateStr + '... Please wait.'), 'Working');
   try {
     deadlineJob(dateStr);
     ui.alert('Success', 'Deadline job for ' + dateStr + ' executed successfully.', ui.ButtonSet.OK);
