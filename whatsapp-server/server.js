@@ -1,0 +1,248 @@
+require('dotenv').config();
+const express = require('express');
+const { Client, LocalAuth, Poll } = require('whatsapp-web.js');
+const qrcodeTerminal = require('qrcode-terminal');
+
+const app = express();
+const port = process.env.PORT || 3000;
+const apiToken = process.env.WHATSAPP_API_TOKEN;
+
+if (!apiToken) {
+  console.warn("WARNING: WHATSAPP_API_TOKEN is not defined in environment variables. Server will run without authentication!");
+}
+
+app.use(express.json());
+
+// Auth middleware
+const authenticate = (req, res, next) => {
+  if (!apiToken) {
+    return next();
+  }
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing or invalid authorization header' });
+  }
+  const token = authHeader.substring(7);
+  if (token !== apiToken) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+  next();
+};
+
+let qrCodeData = null;
+let clientStatus = 'DISCONNECTED'; // DISCONNECTED, WAITING_FOR_QR, CONNECTED
+
+const client = new Client({
+  authStrategy: new LocalAuth({
+    dataPath: './.wwebjs_auth'
+  }),
+  puppeteer: {
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  }
+});
+
+client.on('qr', (qr) => {
+  console.log('QR RECEIVED. Scan the QR code below:');
+  qrcodeTerminal.generate(qr, { small: true });
+  qrCodeData = qr;
+  clientStatus = 'WAITING_FOR_QR';
+});
+
+client.on('ready', () => {
+  console.log('WhatsApp Client is ready!');
+  qrCodeData = null;
+  clientStatus = 'CONNECTED';
+});
+
+client.on('authenticated', () => {
+  console.log('WhatsApp Client is authenticated.');
+});
+
+client.on('auth_failure', (msg) => {
+  console.error('AUTHENTICATION FAILURE:', msg);
+  clientStatus = 'DISCONNECTED';
+});
+
+client.on('disconnected', (reason) => {
+  console.log('Client was logged out. Reason:', reason);
+  clientStatus = 'DISCONNECTED';
+  qrCodeData = null;
+  // Attempt re-init
+  client.initialize();
+});
+
+// Start client
+client.initialize().catch(err => {
+  console.error("Failed to initialize WhatsApp client:", err);
+});
+
+// Endpoints
+
+// Public endpoints (no auth needed for ease of pairing)
+app.get('/status', (req, res) => {
+  res.json({ status: clientStatus, hasQr: !!qrCodeData });
+});
+
+app.get('/qr', (req, res) => {
+  if (clientStatus === 'CONNECTED') {
+    return res.send('<h3>WhatsApp is already connected!</h3>');
+  }
+  if (!qrCodeData) {
+    return res.send('<h3>Waiting for QR code... Please refresh in a moment.</h3>');
+  }
+  
+  // Return a simple HTML page with QR code
+  res.send(`
+    <html>
+      <head>
+        <title>WhatsApp pairing</title>
+        <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+        <style>
+          body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f7f9fa; color: #333; }
+          #qrcode { margin: 30px auto; padding: 20px; background: white; display: inline-block; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+          .status { font-weight: bold; color: #075e54; }
+        </style>
+      </head>
+      <body>
+        <h2>Scan this QR code with your WhatsApp Link Device option</h2>
+        <div id="qrcode"></div>
+        <p>Status: <span class="status">${clientStatus}</span></p>
+        <script>
+          var qr = qrcode(4, 'L');
+          qr.addData('${qrCodeData}');
+          qr.make();
+          document.getElementById('qrcode').innerHTML = qr.createImgTag(8);
+        </script>
+        <p>Refreshing status every 5 seconds...</p>
+        <script>
+          setInterval(() => {
+            fetch('/status')
+              .then(res => res.json())
+              .then(data => {
+                if (data.status === 'CONNECTED') {
+                  window.location.reload();
+                }
+              });
+          }, 5000);
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+// Secured endpoints
+app.get('/chats', authenticate, async (req, res) => {
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({ error: 'WhatsApp client is not connected' });
+    }
+    const chats = await client.getChats();
+    // Return recent 30 chats with their IDs and names
+    const chatList = chats.slice(0, 50).map(chat => ({
+      id: chat.id._serialized,
+      name: chat.name,
+      isGroup: chat.isGroup
+    }));
+    res.json({ chats: chatList });
+  } catch (error) {
+    console.error('Error fetching chats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/send-message', authenticate, async (req, res) => {
+  const { chatId, text } = req.body;
+  if (!chatId || !text) {
+    return res.status(400).json({ error: 'Missing chatId or text' });
+  }
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({ error: 'WhatsApp client is not connected' });
+    }
+    const msg = await client.sendMessage(chatId, text);
+    res.json({ messageId: msg.id._serialized });
+  } catch (error) {
+    console.error('Error sending message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/send-poll', authenticate, async (req, res) => {
+  const { chatId, title, options } = req.body;
+  if (!chatId || !title || !options || !Array.isArray(options)) {
+    return res.status(400).json({ error: 'Missing or invalid chatId, title, or options' });
+  }
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({ error: 'WhatsApp client is not connected' });
+    }
+    // allowMultipleAnswers default is false (single answer)
+    const poll = new Poll(title, options, { allowMultipleAnswers: false });
+    const msg = await client.sendMessage(chatId, poll);
+    res.json({ messageId: msg.id._serialized });
+  } catch (error) {
+    console.error('Error sending poll:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/get-poll-votes', authenticate, async (req, res) => {
+  const { chatId, messageId } = req.body;
+  if (!chatId || !messageId) {
+    return res.status(400).json({ error: 'Missing chatId or messageId' });
+  }
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({ error: 'WhatsApp client is not connected' });
+    }
+    const msg = await client.getMessageById(messageId);
+    if (!msg) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    
+    const votes = await msg.getPollVotes();
+    
+    // Format votes
+    const formattedVotes = votes
+      .filter(v => v.selectedOptions && v.selectedOptions.length > 0)
+      .map(v => {
+        const voterId = typeof v.voter === 'object' ? v.voter._serialized : v.voter;
+        return {
+          voter: voterId,
+          selectedOptionName: v.selectedOptions[0].name
+        };
+      });
+      
+    res.json({ votes: formattedVotes });
+  } catch (error) {
+    console.error('Error getting poll votes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/delete-message', authenticate, async (req, res) => {
+  const { chatId, messageId } = req.body;
+  if (!chatId || !messageId) {
+    return res.status(400).json({ error: 'Missing chatId or messageId' });
+  }
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({ error: 'WhatsApp client is not connected' });
+    }
+    const msg = await client.getMessageById(messageId);
+    if (!msg) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    // delete(true) will delete for everyone
+    await msg.delete(true);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
