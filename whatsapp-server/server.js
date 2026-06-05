@@ -268,3 +268,18 @@ app.post('/delete-message', authenticate, async (req, res) => {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
+// Graceful shutdown handler
+const shutdown = async () => {
+  console.log('Shutdown signal received. Closing WhatsApp client...');
+  try {
+    await client.destroy();
+    console.log('WhatsApp client destroyed.');
+  } catch (err) {
+    console.error('Error destroying client:', err);
+  }
+  process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
