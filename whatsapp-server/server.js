@@ -209,16 +209,26 @@ app.post('/get-poll-votes', authenticate, async (req, res) => {
     
     const votes = await msg.getPollVotes();
     
-    // Format votes
-    const formattedVotes = votes
+    // Format votes by resolving voter LID/JID to standard phone number JID
+    const formattedVotes = await Promise.all(votes
       .filter(v => v.selectedOptions && v.selectedOptions.length > 0)
-      .map(v => {
+      .map(async (v) => {
         const voterId = typeof v.voter === 'object' ? v.voter._serialized : v.voter;
-        return {
-          voter: voterId,
-          selectedOptionName: v.selectedOptions[0].name
-        };
-      });
+        try {
+          const contact = await client.getContactById(voterId);
+          return {
+            voter: contact.id._serialized, // Resolves to standard phone@c.us JID
+            selectedOptionName: v.selectedOptions[0].name
+          };
+        } catch (contactErr) {
+          console.warn('Failed to resolve contact JID for ' + voterId + ':', contactErr.message);
+          return {
+            voter: voterId,
+            selectedOptionName: v.selectedOptions[0].name
+          };
+        }
+      })
+    );
       
     res.json({ votes: formattedVotes });
   } catch (error) {
