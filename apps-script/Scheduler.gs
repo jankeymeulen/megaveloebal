@@ -44,12 +44,15 @@ function morningJob(dateStr) {
     return new Date(a.utcDate) - new Date(b.utcDate);
   });
 
+  var representativeStage = todayMatches[0].stage;
+  var betCost = getBetCost(representativeStage);
+
   // Post intro message
-  var introText = "⚽ *MEGAVELOEBAL: WEDSTRIJDEN VANDAAG* ⚽\n\n" +
+  var introText = "⚽ *MEGAVELOEBAL VANDAAG* ⚽\n\n" +
                   "Goeiemorgen! Wedstrijden van " + targetDateStr + ". " +
                   "Deadline is om *17:00*, " +
-                  "inzet is *" + betCost + "* miljoen." +
-                  "Faites votre jeu!!";
+                  "inzet is *" + betCost + "* miljoen.\n" +
+                  "Faites votre jeu!";
   sendWhatsAppMessage(chatId, introText);
 
   // Send a poll for each match
@@ -136,7 +139,7 @@ function deadlineJob(dateStr) {
   }
 
   var betsToSave = [];
-  var summaryText = "📋 *VOTES CLOSED: BET SUMMARY* 📋\n\n";
+  var summaryText = "📋 *RIEN NE VA PLUS* 📋\n\n";
 
   activeGames.forEach(function(game) {
     var pollVotes = [];
@@ -211,13 +214,13 @@ function deadlineJob(dateStr) {
 
     // Build this game's summary block
     summaryText += "*" + game.homeTeam + " - " + game.awayTeam + "*\n" +
-                   "• " + game.homeTeam + ": " + (homeVotes.length > 0 ? homeVotes.join(', ') : "_None_") + "\n" +
-                   "• " + game.awayTeam + ": " + (awayVotes.length > 0 ? awayVotes.join(', ') : "_None_") + "\n";
+                   "• " + game.homeTeam + ": " + (homeVotes.length > 0 ? homeVotes.join(', ') : "_Niemand_") + "\n" +
+                   "• " + game.awayTeam + ": " + (awayVotes.length > 0 ? awayVotes.join(', ') : "_Niemand_") + "\n";
     if (game.stage === 'GROUP_STAGE') {
-      summaryText += "• Draw: " + (drawVotes.length > 0 ? drawVotes.join(', ') : "_None_") + "\n";
+      summaryText += "• Gelijk: " + (drawVotes.length > 0 ? drawVotes.join(', ') : "_Niemand_") + "\n";
     }
     summaryText += "• Blanco: " + 
-                   (noVotes.length > 0 ? noVotes.join(', ') : "_None_") + "\n\n";
+                   (noVotes.length > 0 ? noVotes.join(', ') : "_Niemand_") + "\n\n";
 
     // Clear pollMessageId in games list so it doesn't trigger again
     game.pollMessageId = '';
@@ -230,6 +233,76 @@ function deadlineJob(dateStr) {
   // Send summary to WhatsApp
   sendWhatsAppMessage(chatId, summaryText);
   Logger.log('deadlineJob finished. Logged bets for ' + targetDateStr + '.');
+}
+
+/**
+ * Executes scoring settlement and distributes coins for a finished game.
+ * Shared between scheduled cron checks and manual game simulations.
+ */
+function settleFinishedGame(localGame, scoreHome, scoreAway, winnerKey, players, bets, chatId) {
+  var result = '';
+  if (winnerKey === 'HOME_TEAM') {
+    result = 'HOME_WIN';
+  } else if (winnerKey === 'AWAY_TEAM') {
+    result = 'AWAY_WIN';
+  } else if (winnerKey === 'DRAW') {
+    result = 'DRAW';
+  } else {
+    // Fallback using scores
+    if (scoreHome > scoreAway) result = 'HOME_WIN';
+    else if (scoreHome < scoreAway) result = 'AWAY_WIN';
+    else result = 'DRAW';
+  }
+
+  // 1. Calculate pool updates
+  var settlement = calculateMatchSettlement(players, bets, localGame.id, localGame.stage, result);
+  
+  // Update local players array in memory for subsequent matches processed in the same run
+  players.forEach(function(p) {
+    if (settlement.balanceUpdates.hasOwnProperty(p.name)) {
+      p.balance = settlement.balanceUpdates[p.name];
+    }
+  });
+
+  // 2. Commit to database
+  updatePlayerBalances(settlement.balanceUpdates);
+  recordBetsBatch(settlement.betsUpdates);
+
+  // 3. Mark game as settled
+  localGame.status = 'FINISHED';
+  localGame.scoreHome = scoreHome;
+  localGame.scoreAway = scoreAway;
+  localGame.result = result;
+  localGame.settled = true;
+
+  // 4. Create and send announcement
+  var winnersList = settlement.betsUpdates.filter(function(b) { return b.result === 'WIN'; }).map(function(b) {
+    var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
+    return p ? p.displayName : b.playerName;
+  });
+  var losersList = settlement.betsUpdates.filter(function(b) { return b.result === 'LOSE'; }).map(function(b) {
+    var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
+    return p ? p.displayName : b.playerName;
+  });
+  var noVotersList = settlement.betsUpdates.filter(function(b) { return b.result === 'NO_VOTE'; }).map(function(b) {
+    var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
+    return p ? p.displayName : b.playerName;
+  });
+
+  var betCost = getBetCost(localGame.stage);
+  var totalLosingPool = losersList.length * betCost;
+  var winDiffStr = winnersList.length > 0 ? ' (+' + (totalLosingPool / winnersList.length).toFixed(1) + ')' : '';
+
+  var resultMessage = "⚽ *MATCH GEDAAN* ⚽\n\n" +
+                      "*" + localGame.homeTeam + "* " + scoreHome + " - " + scoreAway + " *" + localGame.awayTeam + "*\n\n" +
+                      "✅ Winnaars" + winDiffStr + ": " + (winnersList.length > 0 ? winnersList.join(', ') : "_None_") + "\n" +
+                      "❌ Verliezers (-" + betCost.toFixed(1) + "): " + (losersList.length > 0 ? losersList.join(', ') : "_None_") + "\n" +
+                      "🛋️ Bankzitters (-" + betCost.toFixed(1) + "): " + (noVotersList.length > 0 ? noVotersList.join(', ') : "_None_") + "\n\n" +
+                      generateStandingsText(players);
+
+  sendWhatsAppMessage(chatId, resultMessage);
+  
+  return localGame;
 }
 
 /**
@@ -281,72 +354,17 @@ function settlementJob() {
     if (match.status === 'FINISHED') {
       Logger.log('Settling match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam);
       
-      var scoreHome = match.score.fullTime.home;
-      var scoreAway = match.score.fullTime.away;
-      var result = '';
-
-      // Determine result based on score winner
-      if (match.score.winner === 'HOME_TEAM') {
-        result = 'HOME_WIN';
-      } else if (match.score.winner === 'AWAY_TEAM') {
-        result = 'AWAY_WIN';
-      } else if (match.score.winner === 'DRAW') {
-        result = 'DRAW';
-      } else {
-        // Fallback using actual numbers if winner not specified
-        if (scoreHome > scoreAway) result = 'HOME_WIN';
-        else if (scoreHome < scoreAway) result = 'AWAY_WIN';
-        else result = 'DRAW';
-      }
-
-      // 1. Calculate pool updates
-      var settlement = calculateMatchSettlement(players, bets, localGame.id, localGame.stage, result);
+      var settledGame = settleFinishedGame(
+        localGame,
+        match.score.fullTime.home,
+        match.score.fullTime.away,
+        match.score.winner,
+        players,
+        bets,
+        chatId
+      );
       
-      // Update local players array in memory for subsequent matches processed in the same run
-      players.forEach(function(p) {
-        if (settlement.balanceUpdates.hasOwnProperty(p.name)) {
-          p.balance = settlement.balanceUpdates[p.name];
-        }
-      });
-
-      // 2. Commit to database
-      updatePlayerBalances(settlement.balanceUpdates);
-      recordBetsBatch(settlement.betsUpdates);
-
-      // 3. Mark game as settled
-      localGame.status = 'FINISHED';
-      localGame.scoreHome = scoreHome;
-      localGame.scoreAway = scoreAway;
-      localGame.result = result;
-      localGame.settled = true;
-      gamesToUpdate.push(localGame);
-
-      // 4. Create and send announcement
-      var winnersList = settlement.betsUpdates.filter(function(b) { return b.result === 'WIN'; }).map(function(b) {
-        var p = players.find(function(pl) { return pl.name === b.playerName; });
-        return p ? p.displayName : b.playerName;
-      });
-      var losersList = settlement.betsUpdates.filter(function(b) { return b.result === 'LOSE'; }).map(function(b) {
-        var p = players.find(function(pl) { return pl.name === b.playerName; });
-        return p ? p.displayName : b.playerName;
-      });
-      var noVotersList = settlement.betsUpdates.filter(function(b) { return b.result === 'NO_VOTE'; }).map(function(b) {
-        var p = players.find(function(pl) { return pl.name === b.playerName; });
-        return p ? p.displayName : b.playerName;
-      });
-
-      var betCost = getBetCost(localGame.stage);
-      var totalLosingPool = losersList.length * betCost;
-      var winDiffStr = winnersList.length > 0 ? ' (+' + (totalLosingPool / winnersList.length).toFixed(1) + ' coins)' : '';
-
-      var resultMessage = "⚽ *GAME FINISHED: RESULT* ⚽\n\n" +
-                          "*" + localGame.homeTeam + "* " + scoreHome + " - " + scoreAway + " *" + localGame.awayTeam + "*\n\n" +
-                          "✅ Winners" + winDiffStr + ": " + (winnersList.length > 0 ? winnersList.join(', ') : "_None_") + "\n" +
-                          "❌ Losers (-" + betCost + "): " + (losersList.length > 0 ? losersList.join(', ') : "_None_") + "\n" +
-                          "📭 Did not vote (-" + betCost + "): " + (noVotersList.length > 0 ? noVotersList.join(', ') : "_None_") + "\n\n" +
-                          generateStandingsText(players);
-
-      sendWhatsAppMessage(chatId, resultMessage);
+      gamesToUpdate.push(settledGame);
     }
   });
 
