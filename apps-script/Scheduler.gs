@@ -13,7 +13,7 @@ function morningJob(dateStr) {
     return;
   }
 
-  var targetDateStr = dateStr || Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
+  var targetDateStr = (typeof dateStr === 'string' && dateStr) ? dateStr : Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
   Logger.log('Starting morningJob for date ' + targetDateStr + '...');
   
   var window = getMatchWindowForDate(targetDateStr);
@@ -113,7 +113,7 @@ function deadlineJob(dateStr) {
     return;
   }
 
-  var targetDateStr = dateStr || Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
+  var targetDateStr = (typeof dateStr === 'string' && dateStr) ? dateStr : Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
   Logger.log('Starting deadlineJob for date ' + targetDateStr + '...');
   
   var window = getMatchWindowForDate(targetDateStr);
