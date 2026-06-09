@@ -394,7 +394,7 @@
     /* Matches View */
     .matches-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
       gap: 20px;
     }
 
@@ -686,6 +686,55 @@
       border: 1px solid rgba(245, 158, 11, 0.2);
       color: #fbbf24;
     }
+
+    /* Mobile Responsive Optimizations */
+    @media (max-width: 600px) {
+      .hide-mobile {
+        display: none !important;
+      }
+      .container {
+        padding: 10px;
+      }
+      th, td {
+        padding: 12px 10px;
+        font-size: 0.8rem;
+      }
+      .brand h1 {
+        font-size: 1.5rem;
+      }
+      .brand i {
+        font-size: 1.8rem;
+      }
+      .tab-btn {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+      }
+      .stats-summary {
+        gap: 10px;
+      }
+      .stat-card {
+        padding: 15px;
+      }
+      .stat-details p {
+        font-size: 1.3rem;
+      }
+      .chart-box {
+        padding: 10px;
+        min-height: 280px;
+      }
+      .selector-box {
+        max-height: 300px;
+      }
+      .profile-card {
+        padding: 15px;
+      }
+      .history-card {
+        padding: 15px;
+      }
+      .match-card {
+        padding: 15px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -758,8 +807,8 @@
                 <th class="rank-cell">Rank</th>
                 <th>Player Name</th>
                 <th>Coins Balance</th>
-                <th>Total Bets</th>
-                <th>Correct Bets</th>
+                <th class="hide-mobile">Total Bets</th>
+                <th class="hide-mobile">Correct Bets</th>
                 <th>Accuracy</th>
               </tr>
             </thead>
@@ -836,7 +885,7 @@
                 <thead>
                   <tr>
                     <th>Match</th>
-                    <th>Stage</th>
+                    <th class="hide-mobile">Stage</th>
                     <th>Prediction</th>
                     <th>Result</th>
                     <th>Winnings / Loss</th>
@@ -1124,8 +1173,8 @@
             </div>
           </td>
           <td><span class="balance-badge">${p.balance % 1 === 0 ? p.balance.toFixed(0) : p.balance.toFixed(1)}m</span></td>
-          <td>${p.totalBets}</td>
-          <td>${p.correctBets}</td>
+          <td class="hide-mobile">${p.totalBets}</td>
+          <td class="hide-mobile">${p.correctBets}</td>
           <td>
             <div class="accuracy-bar-container">
               <span class="accuracy-text">${accuracy}%</span>
@@ -1419,7 +1468,7 @@
         const row = document.createElement('tr');
         row.innerHTML = `
           <td style="font-weight: 500;">${g.homeTeam} vs ${g.awayTeam}</td>
-          <td><span style="font-size: 0.75rem; text-transform: uppercase;">${g.stage.replace(/_/g, ' ')}</span></td>
+          <td class="hide-mobile"><span style="font-size: 0.75rem; text-transform: uppercase;">${g.stage.replace(/_/g, ' ')}</span></td>
           <td>${predictionText}</td>
           <td>${resultBadge}</td>
           <td style="font-weight: 700; color: ${coinsText.startsWith('+') ? 'var(--secondary)' : (coinsText.startsWith('-') ? 'var(--danger)' : 'inherit')}">${coinsText}</td>
