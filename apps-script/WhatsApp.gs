@@ -30,7 +30,23 @@ function makeWhatsAppRequest(endpoint, payload) {
     muteHttpExceptions: true
   };
 
-  var response = UrlFetchApp.fetch(url, options);
+  var response;
+  var attempts = 4;
+  var delays = [10000, 30000, 60000];
+  for (var i = 0; i < attempts; i++) {
+    try {
+      response = UrlFetchApp.fetch(url, options);
+      break; // Success, break loop
+    } catch (e) {
+      if (i === attempts - 1) {
+        throw new Error('Failed to reach WhatsApp Server after ' + attempts + ' attempts: ' + e.toString());
+      }
+      var delayMs = delays[i];
+      Logger.log('WhatsApp Server API attempt ' + (i + 1) + ' failed: ' + e.toString() + '. Retrying in ' + (delayMs / 1000) + ' seconds...');
+      Utilities.sleep(delayMs);
+    }
+  }
+
   var statusCode = response.getResponseCode();
   var content = response.getContentText();
 

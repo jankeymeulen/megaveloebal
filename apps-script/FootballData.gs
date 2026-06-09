@@ -22,7 +22,23 @@ function makeFootballDataRequest(endpoint) {
     muteHttpExceptions: true
   };
 
-  var response = UrlFetchApp.fetch(url, options);
+  var response;
+  var attempts = 4;
+  var delays = [10000, 30000, 60000];
+  for (var i = 0; i < attempts; i++) {
+    try {
+      response = UrlFetchApp.fetch(url, options);
+      break; // Success, break loop
+    } catch (e) {
+      if (i === attempts - 1) {
+        throw new Error('Failed to fetch from Football-Data API after ' + attempts + ' attempts: ' + e.toString());
+      }
+      var delayMs = delays[i];
+      Logger.log('Football-Data API attempt ' + (i + 1) + ' failed: ' + e.toString() + '. Retrying in ' + (delayMs / 1000) + ' seconds...');
+      Utilities.sleep(delayMs);
+    }
+  }
+
   var statusCode = response.getResponseCode();
   var content = response.getContentText();
 
