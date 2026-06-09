@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Megaveloebal - Dashboard & Stats</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: rgba(17, 24, 39, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f9fafb;
+      --text-muted: #9ca3af;
+      --primary: #6366f1; /* Indigo */
+      --primary-glow: rgba(99, 102, 241, 0.15);
+      --secondary: #10b981; /* Emerald */
+      --accent: #f59e0b; /* Amber */
+      --danger: #ef4444;
+      --glass-bg: rgba(17, 24, 39, 0.45);
+      --glass-blur: blur(12px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 40%);
+      background-attachment: fixed;
+      padding-bottom: 50px;
+    }
+
+    h1, h2, h3, .brand-font {
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* Header & API Configuration */
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand i {
+      font-size: 2.2rem;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand h1 {
+      font-size: 1.8rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+
+
+    /* Tabs Navigation */
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 25px;
+      overflow-x: auto;
+      padding-bottom: 5px;
+    }
+
+    .tab-btn {
+      background: var(--glass-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      color: var(--text-main);
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+
+    /* Main Dashboard Layout */
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Loading and Status Screens */
+    .loading-state, .error-state {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 50px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+      margin-top: 50px;
+    }
+
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      border-left-color: var(--primary);
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Cards & Stats Grid */
+    .stats-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin-bottom: 25px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      color: var(--primary);
+    }
+
+    .stat-icon.green {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--secondary);
+    }
+
+    .stat-icon.amber {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--accent);
+    }
+
+    .stat-details h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+
+    .stat-details p {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    /* Table Design */
+    .table-container {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      overflow-x: auto;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    th {
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    .rank-cell {
+      font-weight: 700;
+      font-size: 1rem;
+      width: 60px;
+    }
+
+    .rank-badge {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+    }
+
+    .rank-badge.gold { background: #ffd700; color: #000; }
+    .rank-badge.silver { background: #c0c0c0; color: #000; }
+    .rank-badge.bronze { background: #cd7f32; color: #fff; }
+
+    .player-name-cell {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .player-nickname {
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+
+
+    .balance-badge {
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      display: inline-block;
+    }
+
+    .accuracy-bar-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 140px;
+    }
+
+    .accuracy-text {
+      font-size: 0.85rem;
+      font-weight: 600;
+      width: 45px;
+    }
+
+    .accuracy-track {
+      flex: 1;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .accuracy-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      border-radius: 4px;
+    }
+
+    /* Compare Players Layout */
+    .compare-container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 25px;
+    }
+
+    @media (max-width: 768px) {
+      .compare-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .selector-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .selector-box h3 {
+      font-size: 0.95rem;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--card-border);
+      color: var(--text-muted);
+    }
+
+    .player-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      user-select: none;
+    }
+
+    .player-checkbox input {
+      accent-color: var(--primary);
+      width: 16px;
+      height: 16px;
+    }
+
+    .chart-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      min-height: 400px;
+      position: relative;
+    }
+
+    /* Matches View */
+    .matches-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 20px;
+    }
+
+    .match-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .match-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .match-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 10px;
+    }
+
+    .match-stage {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .match-teams {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 10px 0;
+    }
+
+    .team-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .team-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1rem;
+      font-weight: 500;
+    }
+
+    .flag-icon {
+      width: 24px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 2px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .team-score {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .match-card.finished .team-score {
+      color: var(--text-main);
+    }
+
+    .match-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid var(--card-border);
+      font-size: 0.8rem;
+    }
+
+    .bet-cost-indicator {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .details-toggle {
+      color: var(--primary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Modal / Expanded Details */
+    .match-details-drawer {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 0.8rem;
+    }
+
+    .detail-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .detail-label {
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.5px;
+    }
+
+    .detail-values {
+      color: var(--text-main);
+      line-height: 1.4;
+    }
+
+    /* Player Profile View */
+    .profile-select-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .profile-select-container select {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .profile-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 25px;
+    }
+
+    @media (max-width: 900px) {
+      .profile-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .profile-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .profile-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 25px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .profile-card::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .profile-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      color: white;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 15px rgba(99,102,241,0.3);
+    }
+
+    .profile-card h2 {
+      font-size: 1.4rem;
+      margin-bottom: 5px;
+    }
+
+    .profile-card .real-name {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+    }
+
+    .profile-stats-list {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      text-align: left;
+    }
+
+    .profile-stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .profile-stat-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .profile-stat-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .profile-stat-val {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .history-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 25px;
+    }
+
+    .history-card h3 {
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.75rem;
+      display: inline-block;
+    }
+
+    .badge.win {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #34d399;
+    }
+
+    .badge.lose {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+
+    .badge.no_vote {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="header-top">
+        <div class="brand">
+          <i class="fa-solid fa-trophy"></i>
+          <h1>Megaveloebal</h1>
+        </div>
+      </div>
+
+      <nav class="tabs">
+        <button class="tab-btn active" data-tab="standings"><i class="fa-solid fa-list-ol"></i> Standings</button>
+        <button class="tab-btn" data-tab="compare"><i class="fa-solid fa-chart-line"></i> Compare Players</button>
+        <button class="tab-btn" data-tab="matches"><i class="fa-solid fa-calendar-days"></i> Match History</button>
+        <button class="tab-btn" data-tab="profile"><i class="fa-solid fa-user"></i> Player Profile</button>
+      </nav>
+    </header>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-state">
+      <div class="spinner"></div>
+      <h3 style="font-size: 1.1rem; font-weight: 600;">Fetching data from Google Sheet</h3>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">Fetching and processing latest match statistics...</p>
+    </div>
+
+    <!-- Error Screen -->
+    <div id="errorScreen" class="error-state" style="display: none;">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size: 2.5rem; color: var(--danger);"></i>
+      <h3 style="font-size: 1.1rem; font-weight: 600;">Failed to Load Sheet Data</h3>
+      <p id="errorMsg" style="color: var(--text-muted); font-size: 0.9rem; max-width: 500px;"></p>
+    </div>
+
+    <!-- Main Screens (Initially hidden until data loads) -->
+    <div id="mainDashboard" style="display: none;">
+      
+      <!-- Stats Overview Banner -->
+      <div class="stats-summary">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
+          <div class="stat-details">
+            <h3>Total Players</h3>
+            <p id="totalPlayersVal">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i class="fa-solid fa-circle-check"></i></div>
+          <div class="stat-details">
+            <h3>Settled Games</h3>
+            <p id="settledGamesVal">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber"><i class="fa-solid fa-coins"></i></div>
+          <div class="stat-details">
+            <h3>Total Coins Burned</h3>
+            <p id="totalCoinsBurnedVal">0m</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Standings -->
+      <div id="standingsTab" class="tab-content active">
+        <div class="table-container">
+          <table id="standingsTable">
+            <thead>
+              <tr>
+                <th class="rank-cell">Rank</th>
+                <th>Player Name</th>
+                <th>Coins Balance</th>
+                <th>Total Bets</th>
+                <th>Correct Bets</th>
+                <th>Accuracy</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Injected by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Compare -->
+      <div id="compareTab" class="tab-content">
+        <div class="compare-container">
+          <div class="selector-box">
+            <h3>Select Players</h3>
+            <div id="playerSelectorList">
+              <!-- Injected by JS -->
+            </div>
+          </div>
+          <div class="chart-box">
+            <canvas id="comparisonChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Matches -->
+      <div id="matchesTab" class="tab-content">
+        <div class="matches-grid" id="matchesGrid">
+          <!-- Injected by JS -->
+        </div>
+      </div>
+
+      <!-- Tab: Profile -->
+      <div id="profileTab" class="tab-content">
+        <div class="profile-select-container">
+          <h2 style="font-size: 1.4rem;">Player Details Profile</h2>
+          <select id="profilePlayerSelect">
+            <!-- Injected by JS -->
+          </select>
+        </div>
+        
+        <div class="profile-grid">
+          <div class="profile-sidebar">
+            <div class="profile-card">
+              <div class="profile-avatar" id="profileInitials">JD</div>
+              <h2 id="profileDisplayName">John Doe</h2>
+
+              
+              <div class="profile-stats-list">
+                <div class="profile-stat-row">
+                  <span class="profile-stat-label">Coins Balance</span>
+                  <span class="profile-stat-val" style="color: var(--secondary);" id="profileBalance">125m</span>
+                </div>
+                <div class="profile-stat-row">
+                  <span class="profile-stat-label">Total Bets placed</span>
+                  <span class="profile-stat-val" id="profileBetsCount">0</span>
+                </div>
+                <div class="profile-stat-row">
+                  <span class="profile-stat-label">Correct Predictions</span>
+                  <span class="profile-stat-val" id="profileWinsCount">0</span>
+                </div>
+                <div class="profile-stat-row">
+                  <span class="profile-stat-label">Voting Accuracy</span>
+                  <span class="profile-stat-val" id="profileAccuracy">0%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="history-card">
+            <h3><i class="fa-solid fa-receipt"></i> Personal Betting History</h3>
+            <div class="table-container">
+              <table id="profileBetsTable">
+                <thead>
+                  <tr>
+                    <th>Match</th>
+                    <th>Stage</th>
+                    <th>Prediction</th>
+                    <th>Result</th>
+                    <th>Winnings / Loss</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Injected by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    
+    const API_URL = "https://script.google.com/macros/s/AKfycbxzxFK_ZVFF2-TQkm4FKfJQxp2X4Mte-p2dr3cbpco5d910iRRQjLnP1RE3DTuTEoo/exec";
+
+    const TEAM_FLAGS = {
+      // World Cup (WC) Teams
+      "algeria": "dz",
+      "argentina": "ar",
+      "australia": "au",
+      "austria": "at",
+      "belgium": "be",
+      "bosnia-herzegovina": "ba",
+      "brazil": "br",
+      "canada": "ca",
+      "cape verde islands": "cv",
+      "cabo verde": "cv",
+      "cape verde": "cv",
+      "colombia": "co",
+      "congo dr": "cd",
+      "democratic republic of the congo": "cd",
+      "croatia": "hr",
+      "curaçao": "cw",
+      "curacao": "cw",
+      "czechia": "cz",
+      "czech republic": "cz",
+      "ecuador": "ec",
+      "egypt": "eg",
+      "england": "gb-eng",
+      "france": "fr",
+      "germany": "de",
+      "ghana": "gh",
+      "haiti": "ht",
+      "iran": "ir",
+      "iraq": "iq",
+      "ivory coast": "ci",
+      "cote d'ivoire": "ci",
+      "côte d'ivoire": "ci",
+      "japan": "jp",
+      "jordan": "jo",
+      "mexico": "mx",
+      "morocco": "ma",
+      "netherlands": "nl",
+      "new zealand": "nz",
+      "norway": "no",
+      "panama": "pa",
+      "paraguay": "py",
+      "portugal": "pt",
+      "qatar": "qa",
+      "saudi arabia": "sa",
+      "scotland": "gb-sct",
+      "senegal": "sn",
+      "south africa": "za",
+      "south korea": "kr",
+      "korea republic": "kr",
+      "spain": "es",
+      "sweden": "se",
+      "switzerland": "ch",
+      "tunisia": "tn",
+      "turkey": "tr",
+      "united states": "us",
+      "usa": "us",
+      "uruguay": "uy",
+      "uzbekistan": "uz",
+
+      // Euro (EC) Teams
+      "albania": "al",
+      "denmark": "dk",
+      "georgia": "ge",
+      "hungary": "hu",
+      "italy": "it",
+      "poland": "pl",
+      "romania": "ro",
+      "serbia": "rs",
+      "slovakia": "sk",
+      "slovenia": "si",
+      "ukraine": "ua",
+      "wales": "gb-wls",
+      "northern ireland": "gb-nir",
+      "republic of ireland": "ie",
+      "ireland": "ie"
+    };
+
+    // State
+    let apiData = null;
+    let computedData = {
+      playersMap: {},
+      gamesMap: {},
+      settledGamesChronological: [],
+      playerBalancesHistory: {} // playerName -> [array of balances]
+    };
+    let comparisonChartInstance = null;
+
+    // Elements
+    const loadingScreen = document.getElementById('loadingScreen');
+    const errorScreen = document.getElementById('errorScreen');
+    const errorMsg = document.getElementById('errorMsg');
+    const mainDashboard = document.getElementById('mainDashboard');
+
+    // Load URL on startup
+    window.addEventListener('DOMContentLoaded', () => {
+      if (!API_URL || API_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE") {
+        loadingScreen.style.display = 'none';
+        errorScreen.style.display = 'flex';
+        errorMsg.textContent = 'Configuration Error: Please open index.html and set the API_URL constant with your deployed Google Apps Script Web App URL.';
+        return;
+      }
+      fetchData(API_URL);
+    });
+
+    // Handle tab switching
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabButtons.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+
+        btn.classList.add('active');
+        const tabName = btn.dataset.tab;
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+
+        // Special triggers when tab opens
+        if (tabName === 'compare') {
+          renderComparisonChart();
+        }
+      });
+    });
+
+    // Retrieve Flag Image Tag
+    function getFlagImg(teamName) {
+      if (!teamName) return '';
+      const norm = teamName.toLowerCase().trim();
+      if (TEAM_FLAGS[norm]) {
+        return `<img src="https://flagcdn.com/w40/${TEAM_FLAGS[norm]}.png" class="flag-icon" alt="${teamName}">`;
+      }
+      return `<span style="font-size: 1.1rem; margin-right: 8px;">⚽</span>`;
+    }
+
+    // Main Fetch
+    function fetchData(url) {
+      loadingScreen.style.display = 'flex';
+      errorScreen.style.display = 'none';
+      mainDashboard.style.display = 'none';
+
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data.success === false) {
+            throw new Error(data.error || 'Server returned success: false');
+          }
+          
+          apiData = data;
+          processData();
+          renderDashboard();
+          
+          loadingScreen.style.display = 'none';
+          mainDashboard.style.display = 'block';
+        })
+        .catch(err => {
+          console.error(err);
+          loadingScreen.style.display = 'none';
+          errorScreen.style.display = 'flex';
+          errorMsg.textContent = `Connection failed. Make sure your Web App URL is correct, deployed for "Anyone", and CORS is allowed. Error details: ${err.message}`;
+        });
+    }
+
+    // Process spreadsheet data to compile statistics and balance histories
+    function processData() {
+      // 1. Build basic maps
+      computedData.playersMap = {};
+      apiData.players.forEach(p => {
+        computedData.playersMap[p.name] = {
+          ...p,
+          displayName: p.nickname || p.name,
+          totalBets: 0,
+          correctBets: 0
+        };
+      });
+
+      computedData.gamesMap = {};
+      apiData.games.forEach(g => {
+        computedData.gamesMap[g.id] = g;
+      });
+
+      // 2. Sort completed matches by date
+      computedData.settledGamesChronological = apiData.games
+        .filter(g => g.settled)
+        .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+      // 3. Compute running balance histories for graphs
+      // Each player starts with 125 coins at "Start" (timestamp 0)
+      const playerBalances = {};
+      Object.keys(computedData.playersMap).forEach(name => {
+        playerBalances[name] = 125;
+        computedData.playerBalancesHistory[name] = [125];
+      });
+
+      computedData.settledGamesChronological.forEach(game => {
+        // Find all bets for this game
+        const gameBets = apiData.bets.filter(b => b.gameId === game.id);
+
+        Object.keys(computedData.playersMap).forEach(name => {
+          const playerBet = gameBets.find(b => b.playerName.trim().toLowerCase() === name.trim().toLowerCase());
+          
+          let netChange = -game.betCost; // Default: did not vote or lost
+          
+          if (playerBet) {
+            const opt = (playerBet.betOption || '').trim().toUpperCase();
+            if (opt !== 'NO_VOTE' && opt !== '') {
+              // Player voted
+              computedData.playersMap[name].totalBets++;
+              if (playerBet.result === 'WIN') {
+                netChange = playerBet.winnings; // Correct guess, net gain
+                computedData.playersMap[name].correctBets++;
+              }
+            }
+          }
+
+          playerBalances[name] += netChange;
+          computedData.playerBalancesHistory[name].push(playerBalances[name]);
+        });
+      });
+    }
+
+    // Render HTML Views
+    function renderDashboard() {
+      // Banners
+      document.getElementById('totalPlayersVal').textContent = apiData.players.length;
+      document.getElementById('settledGamesVal').textContent = computedData.settledGamesChronological.length;
+
+      // Calculate total coins burned
+      // A bet is burned if it has result 'NO_VOTE' (lost)
+      let totalBurned = 0;
+      apiData.bets.forEach(b => {
+        if (b.result === 'NO_VOTE') {
+          totalBurned += b.coinsBet;
+        }
+      });
+      document.getElementById('totalCoinsBurnedVal').textContent = `${totalBurned}m`;
+
+      // 1. Render Standings Table
+      const standingsBody = document.querySelector('#standingsTable tbody');
+      standingsBody.innerHTML = '';
+      
+      // Sort players by balance descending
+      const sortedPlayers = Object.values(computedData.playersMap).sort((a, b) => b.balance - a.balance);
+
+      sortedPlayers.forEach((p, idx) => {
+        const rank = idx + 1;
+        let rankDisplay = `<span class="rank-badge">${rank}</span>`;
+        if (rank === 1) rankDisplay = `<span class="rank-badge gold"><i class="fa-solid fa-medal"></i></span>`;
+        else if (rank === 2) rankDisplay = `<span class="rank-badge silver"><i class="fa-solid fa-medal"></i></span>`;
+        else if (rank === 3) rankDisplay = `<span class="rank-badge bronze"><i class="fa-solid fa-medal"></i></span>`;
+
+        const accuracy = p.totalBets > 0 ? Math.round((p.correctBets / p.totalBets) * 100) : 0;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="rank-cell">${rankDisplay}</td>
+          <td>
+            <div class="player-name-cell">
+              <span class="player-nickname">${p.displayName}</span>
+            </div>
+          </td>
+          <td><span class="balance-badge">${p.balance % 1 === 0 ? p.balance.toFixed(0) : p.balance.toFixed(1)}m</span></td>
+          <td>${p.totalBets}</td>
+          <td>${p.correctBets}</td>
+          <td>
+            <div class="accuracy-bar-container">
+              <span class="accuracy-text">${accuracy}%</span>
+              <div class="accuracy-track">
+                <div class="accuracy-fill" style="width: ${accuracy}%"></div>
+              </div>
+            </div>
+          </td>
+        `;
+        standingsBody.appendChild(row);
+      });
+
+      // 2. Populate Comparison Checkbox Selectors
+      const selectorList = document.getElementById('playerSelectorList');
+      selectorList.innerHTML = '';
+      
+      sortedPlayers.forEach((p, idx) => {
+        const div = document.createElement('label');
+        div.className = 'player-checkbox';
+        // Select top 5 by default, others unselected
+        const checked = idx < 5 ? 'checked' : '';
+        div.innerHTML = `
+          <input type="checkbox" value="${p.name}" ${checked} onchange="renderComparisonChart()">
+          <span>${p.displayName}</span>
+        `;
+        selectorList.appendChild(div);
+      });
+
+      // 3. Render Match History cards
+      const matchesGrid = document.getElementById('matchesGrid');
+      matchesGrid.innerHTML = '';
+
+      // Reverse chronological order for history
+      const sortedGames = apiData.games.slice().sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+      sortedGames.forEach(g => {
+        const gameDate = new Date(g.dateTime).toLocaleDateString('nl-BE', {
+          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+        });
+        
+        const card = document.createElement('div');
+        card.className = `match-card ${g.settled ? 'finished' : ''}`;
+        
+        let footerContent = '';
+        let drawerContent = '';
+
+        if (g.settled) {
+          // Compile bet details for the expanding drawer
+          const gameBets = apiData.bets.filter(b => b.gameId === g.id);
+          const winners = gameBets.filter(b => b.result === 'WIN').map(b => computedData.playersMap[b.playerName]?.displayName || b.playerName);
+          const losers = gameBets.filter(b => b.result === 'LOSE').map(b => computedData.playersMap[b.playerName]?.displayName || b.playerName);
+          const nonVoters = gameBets.filter(b => b.result === 'NO_VOTE').map(b => computedData.playersMap[b.playerName]?.displayName || b.playerName);
+
+          footerContent = `
+            <span class="bet-cost-indicator"><i class="fa-solid fa-coins"></i> Cost: ${g.betCost}m</span>
+            <button class="details-toggle" onclick="toggleDrawer('${g.id}')">
+              Details <i class="fa-solid fa-chevron-down" id="arrow-${g.id}"></i>
+            </button>
+          `;
+
+          drawerContent = `
+            <div class="match-details-drawer" id="drawer-${g.id}">
+              <div class="detail-group">
+                <span class="detail-label">✅ Winnaars:</span>
+                <span class="detail-values">${winners.length > 0 ? winners.join(', ') : '_Geen_'}</span>
+              </div>
+              <div class="detail-group">
+                <span class="detail-label">❌ Verliezers:</span>
+                <span class="detail-values">${losers.length > 0 ? losers.join(', ') : '_Geen_'}</span>
+              </div>
+              <div class="detail-group">
+                <span class="detail-label">🛋️ Bankzitters:</span>
+                <span class="detail-values">${nonVoters.length > 0 ? nonVoters.join(', ') : '_Geen_'}</span>
+              </div>
+            </div>
+          `;
+        } else {
+          footerContent = `
+            <span class="bet-cost-indicator"><i class="fa-solid fa-coins"></i> Cost: ${g.betCost}m</span>
+            <span style="color: var(--accent); font-weight: 600;"><i class="fa-solid fa-clock"></i> Pending</span>
+          `;
+        }
+
+        // Highlight scores in bold
+        const scoreHomeDisp = g.scoreHome !== null ? g.scoreHome : '-';
+        const scoreAwayDisp = g.scoreAway !== null ? g.scoreAway : '-';
+
+        card.innerHTML = `
+          <div class="match-header">
+            <span class="match-stage">${g.stage.replace(/_/g, ' ')}</span>
+            <span>${gameDate}</span>
+          </div>
+          <div class="match-teams">
+            <div class="team-row">
+              <div class="team-info">
+                ${getFlagImg(g.homeTeam)}
+                <span>${g.homeTeam}</span>
+              </div>
+              <span class="team-score">${scoreHomeDisp}</span>
+            </div>
+            <div class="team-row">
+              <div class="team-info">
+                ${getFlagImg(g.awayTeam)}
+                <span>${g.awayTeam}</span>
+              </div>
+              <span class="team-score">${scoreAwayDisp}</span>
+            </div>
+          </div>
+          <div class="match-footer">
+            ${footerContent}
+          </div>
+          ${drawerContent}
+        `;
+        matchesGrid.appendChild(card);
+      });
+
+      // 4. Populate Profile Select dropdown
+      const select = document.getElementById('profilePlayerSelect');
+      select.innerHTML = '';
+      
+      sortedPlayers.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.displayName;
+        select.appendChild(opt);
+      });
+
+      // Trigger first profile render
+      if (sortedPlayers.length > 0) {
+        renderPlayerProfile(sortedPlayers[0].name);
+      }
+    }
+
+    // Toggle expansion drawer for match bets details
+    window.toggleDrawer = function(gameId) {
+      const drawer = document.getElementById(`drawer-${gameId}`);
+      const arrow = document.getElementById(`arrow-${gameId}`);
+      
+      if (drawer.style.display === 'flex') {
+        drawer.style.display = 'none';
+        arrow.className = 'fa-solid fa-chevron-down';
+      } else {
+        drawer.style.display = 'flex';
+        arrow.className = 'fa-solid fa-chevron-up';
+      }
+    };
+
+    // Render Chart comparing multiple players balance histories
+    function renderComparisonChart() {
+      const selectedNames = Array.from(document.querySelectorAll('#playerSelectorList input:checked')).map(el => el.value);
+      
+      if (selectedNames.length === 0) {
+        if (comparisonChartInstance) comparisonChartInstance.destroy();
+        return;
+      }
+
+      // X-Axis Labels: Game index (0, 1, 2...) or Match details
+      const labels = ["Start"];
+      computedData.settledGamesChronological.forEach((g, idx) => {
+        labels.push(`${g.homeTeam.substring(0,3)} vs ${g.awayTeam.substring(0,3)}`);
+      });
+
+      // Colors generator
+      const colors = [
+        '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#3b82f6', 
+        '#84cc16', '#a855f7', '#f97316', '#06b6d4', '#eab308'
+      ];
+
+      const datasets = selectedNames.map((name, idx) => {
+        const p = computedData.playersMap[name];
+        const color = colors[idx % colors.length];
+        return {
+          label: p.displayName,
+          data: computedData.playerBalancesHistory[name],
+          borderColor: color,
+          backgroundColor: color + '1A', // transparent fill
+          tension: 0.25,
+          borderWidth: 3,
+          pointRadius: 3,
+          pointHoverRadius: 6
+        };
+      });
+
+      const ctx = document.getElementById('comparisonChart').getContext('2d');
+      if (comparisonChartInstance) {
+        comparisonChartInstance.destroy();
+      }
+
+      comparisonChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { color: '#f9fafb', font: { family: 'Inter', weight: '600' } }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              backgroundColor: '#111827',
+              titleColor: '#f9fafb',
+              bodyColor: '#9ca3af',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderWidth: 1
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#9ca3af', font: { size: 10 } },
+              grid: { color: 'rgba(255, 255, 255, 0.04)' }
+            },
+            y: {
+              ticks: { color: '#9ca3af', callback: val => `${val}m` },
+              grid: { color: 'rgba(255, 255, 255, 0.04)' }
+            }
+          }
+        }
+      });
+    }
+
+    // Profile selector change listener
+    document.getElementById('profilePlayerSelect').addEventListener('change', (e) => {
+      renderPlayerProfile(e.target.value);
+    });
+
+    // Render single player profile details
+    function renderPlayerProfile(playerName) {
+      const p = computedData.playersMap[playerName];
+      if (!p) return;
+
+      // Stats card
+      document.getElementById('profileDisplayName').textContent = p.displayName;
+      document.getElementById('profileInitials').textContent = p.displayName.substring(0, 2).toUpperCase();
+      
+      const accuracy = p.totalBets > 0 ? Math.round((p.correctBets / p.totalBets) * 100) : 0;
+      document.getElementById('profileBalance').textContent = `${p.balance % 1 === 0 ? p.balance.toFixed(0) : p.balance.toFixed(1)}m`;
+      document.getElementById('profileBetsCount').textContent = p.totalBets;
+      document.getElementById('profileWinsCount').textContent = p.correctBets;
+      document.getElementById('profileAccuracy').textContent = `${accuracy}%`;
+
+      // Profile Bets Table
+      const profileBody = document.querySelector('#profileBetsTable tbody');
+      profileBody.innerHTML = '';
+
+      // Get player bets
+      const playerBets = apiData.bets.filter(b => b.playerName.trim().toLowerCase() === playerName.trim().toLowerCase());
+      
+      // Sort matches in reverse order for profile history
+      const sortedGames = apiData.games.slice().sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+      sortedGames.forEach(g => {
+        const bet = playerBets.find(b => b.gameId === g.id);
+        
+        let predictionText = '-';
+        let resultBadge = '';
+        let coinsText = '-';
+
+        if (bet) {
+          // Resolve prediction text name
+          if (bet.betOption === 'HOME_WIN') {
+            predictionText = g.homeTeam;
+          } else if (bet.betOption === 'AWAY_WIN') {
+            predictionText = g.awayTeam;
+          } else if (bet.betOption === 'DRAW') {
+            predictionText = 'Gelijk';
+          } else {
+            predictionText = 'Geen stem';
+          }
+
+          if (g.settled) {
+            if (bet.result === 'WIN') {
+              resultBadge = '<span class="badge win">WIN</span>';
+              coinsText = `+${bet.winnings.toFixed(1)}m`;
+            } else if (bet.result === 'LOSE') {
+              resultBadge = '<span class="badge lose">LOSS</span>';
+              coinsText = `-${bet.coinsBet}m`;
+            } else {
+              resultBadge = '<span class="badge no_vote">NO VOTE</span>';
+              coinsText = `-${bet.coinsBet}m`;
+            }
+          }
+        } else if (g.settled) {
+          // No bet recorded but game is settled
+          resultBadge = '<span class="badge no_vote">NO VOTE</span>';
+          coinsText = `-${g.betCost}m`;
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="font-weight: 500;">${g.homeTeam} vs ${g.awayTeam}</td>
+          <td><span style="font-size: 0.75rem; text-transform: uppercase;">${g.stage.replace(/_/g, ' ')}</span></td>
+          <td>${predictionText}</td>
+          <td>${resultBadge}</td>
+          <td style="font-weight: 700; color: ${coinsText.startsWith('+') ? 'var(--secondary)' : (coinsText.startsWith('-') ? 'var(--danger)' : 'inherit')}">${coinsText}</td>
+        `;
+        profileBody.appendChild(row);
+      });
+    }
+  </script>
+</body>
+</html>
