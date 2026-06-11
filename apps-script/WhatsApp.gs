@@ -124,3 +124,18 @@ function fetchGroupParticipants(chatId) {
   });
   return res.participants || [];
 }
+
+/**
+ * Triggers xAI image generation on the WhatsApp proxy server to generate an image
+ * and send it directly to the specified group chat.
+ * @param {string} chatId The WhatsApp Group ID (JID)
+ * @param {string} prompt The text prompt for generation
+ * @returns {string} The WhatsApp message ID of the sent image
+ */
+function sendWhatsAppGeneratedImage(chatId, prompt) {
+  var res = makeWhatsAppRequest('/generate-image', {
+    groupid: chatId,
+    prompt: 'A group of photo models, one each from ' + prompt + ' posing on a soccer pitch. The little clothing they are wearing have colours representative for their countries, they have some makeup as well with those colours and some of them are carrying some flags or objects typical for their country. They show ample cleavage, not everything is covered. A typical photo one would find in a lad magazine. On the top of the image there is a caption saying "Megaveloebal Babes"'
+  });
+  return res.messageId;
+}

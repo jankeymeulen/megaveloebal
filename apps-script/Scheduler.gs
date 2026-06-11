@@ -232,6 +232,7 @@ function deadlineJob(dateStr) {
 
   // Send summary to WhatsApp
   sendWhatsAppMessage(chatId, summaryText);
+  generateAndSendMatchImageForDate(dateStr);
   Logger.log('deadlineJob finished. Logged bets for ' + targetDateStr + '.');
 }
 
@@ -488,4 +489,77 @@ function getMatchWindowForDate(targetDateStr) {
     start: windowStart,
     end: windowEnd
   };
+}
+
+/**
+ * Fetches the matches for the given day, extracts unique countries,
+ * formats a prompt listing them, and triggers the image generation WhatsApp API.
+ * @param {string} dateStr The date in "YYYY-MM-DD" format (default is today)
+ */
+function generateAndSendMatchImageForDate(dateStr) {
+  var chatId = getConfig('WHATSAPP_GROUP_ID');
+  if (!chatId) {
+    Logger.log('Error: WHATSAPP_GROUP_ID is not configured.');
+    return;
+  }
+
+  var targetDateStr = (typeof dateStr === 'string' && dateStr) ? dateStr : Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
+  Logger.log('Fetching matches for image generation on: ' + targetDateStr);
+
+  var window = getMatchWindowForDate(targetDateStr);
+  var matches = [];
+  try {
+    var allMatches = fetchAllWorldCupMatches();
+    matches = allMatches.filter(function(match) {
+      var matchDate = new Date(match.utcDate);
+      return matchDate >= window.start && matchDate < window.end;
+    });
+  } catch (e) {
+    Logger.log('Error fetching matches: ' + e.toString());
+    return;
+  }
+
+  if (matches.length === 0) {
+    Logger.log('No matches scheduled in window for: ' + targetDateStr);
+    return;
+  }
+
+  // Extract unique team names
+  var countriesSet = {};
+  matches.forEach(function(match) {
+    if (match.homeTeam && match.homeTeam.name) {
+      countriesSet[match.homeTeam.name.trim()] = true;
+    }
+    if (match.awayTeam && match.awayTeam.name) {
+      countriesSet[match.awayTeam.name.trim()] = true;
+    }
+  });
+
+  var countriesList = Object.keys(countriesSet);
+  if (countriesList.length === 0) {
+    Logger.log('No countries found in matches.');
+    return;
+  }
+
+  // Format the prompt: "$country{1}, $country{2}, ... , $country{n-1} and $country{n}"
+  var formattedCountries = '';
+  if (countriesList.length === 1) {
+    formattedCountries = countriesList[0];
+  } else if (countriesList.length === 2) {
+    formattedCountries = countriesList[0] + ' and ' + countriesList[1];
+  } else {
+    var lastCountry = countriesList.pop();
+    formattedCountries = countriesList.join(', ') + ' and ' + lastCountry;
+  }
+
+  Logger.log('Generated prompt: ' + formattedCountries);
+  
+  // Call the WhatsApp proxy server to generate and send the image
+  try {
+    var messageId = sendWhatsAppGeneratedImage(chatId, formattedCountries);
+    Logger.log('Image successfully sent. Message ID: ' + messageId);
+  } catch (err) {
+    Logger.log('Error calling generate-image endpoint: ' + err.toString());
+    throw err;
+  }
 }

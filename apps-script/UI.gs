@@ -22,6 +22,7 @@ function onOpen() {
     .addItem('List WhatsApp JIDs / Chat IDs', 'menuListChats')
     .addItem('Send test poll to specific JID', 'menuSendTestPoll')
     .addItem('Send test message to specific JID', 'menuSendTestMessage')
+    .addItem('Send match day image...', 'menuSendMatchImageForDate')
     .addItem('Run interactive end-to-end test', 'menuRunInteractiveTest')
     .addToUi();
 }
@@ -330,5 +331,29 @@ function menuPrepopulatePlayers() {
     ui.alert('Success', 'Group Scan Complete!\n\n• Found ' + participants.length + ' group members.\n• Appended ' + newCount + ' new players to the Players sheet.', ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Error', 'Failed to prepopulate players: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Prompts for a date and generates/sends the match image for that date.
+ */
+function menuSendMatchImageForDate() {
+  var ui = SpreadsheetApp.getUi();
+  var defaultDate = Utilities.formatDate(new Date(), "Europe/Brussels", "yyyy-MM-dd");
+  var prompt = ui.prompt('Send Match Image for Date', 'Enter date in YYYY-MM-DD format (e.g. ' + defaultDate + '):', ui.ButtonSet.OK_CANCEL);
+  if (prompt.getSelectedButton() !== ui.Button.OK) return;
+  var dateStr = prompt.getResponseText().trim();
+  
+  var regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateStr)) {
+    ui.alert('Invalid Format', 'Please enter the date in YYYY-MM-DD format.', ui.ButtonSet.OK);
+    return;
+  }
+  
+  try {
+    generateAndSendMatchImageForDate(dateStr);
+    ui.alert('Success', 'Image generation requested for ' + dateStr + '.', ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Error', 'Execution failed: ' + e.toString(), ui.ButtonSet.OK);
   }
 }
