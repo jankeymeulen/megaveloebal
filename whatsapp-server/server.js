@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { Client, LocalAuth, Poll } = require('whatsapp-web.js');
+const { Client, LocalAuth, Poll, MessageMedia } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 
 const app = express();
@@ -298,6 +298,66 @@ app.post('/delete-message', authenticate, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/generate-image', authenticate, async (req, res) => {
+  const { prompt, groupid } = req.body;
+  if (!prompt || !groupid) {
+    return res.status(400).json({ error: 'Missing prompt or groupid' });
+  }
+  
+  const apiKey = process.env.XAI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'XAI_API_KEY is not configured in the server environment' });
+  }
+  
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({ error: 'WhatsApp client is not connected' });
+    }
+
+    if (typeof fetch !== 'function') {
+      throw new Error('Native fetch is not available. Please upgrade to Node.js 18 or later.');
+    }
+    
+    // Call xAI image generation API
+    console.log(`Generating image for prompt: "${prompt}"...`);
+    const response = await fetch('https://api.x.ai/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'grok-imagine-image-quality',
+        prompt: prompt
+      })
+    });
+    
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`xAI API error (${response.status}): ${errText}`);
+    }
+    
+    const result = await response.json();
+    if (!result.data || result.data.length === 0 || !result.data[0].url) {
+      throw new Error('xAI API did not return any image URL');
+    }
+    
+    const imageUrl = result.data[0].url;
+    console.log(`Image generated. Downloading from: ${imageUrl}`);
+    
+    // Download and serialize image using MessageMedia
+    const media = await MessageMedia.fromUrl(imageUrl);
+    
+    console.log(`Sending image to JID: ${groupid}`);
+    const msg = await client.sendMessage(groupid, media);
+    
+    res.json({ success: true, messageId: msg.id._serialized });
+  } catch (error) {
+    console.error('Error generating or sending image:', error);
     res.status(500).json({ error: error.message });
   }
 });
