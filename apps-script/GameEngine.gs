@@ -116,12 +116,12 @@ function calculateMatchSettlement(players, bets, gameId, stage, result) {
   }
 
   // 3. Process non-voters (NO_VOTE)
-  // Identify players in the game who did not place a bet before the deadline
+  // Identify players in the game who did not place a bet before the deadline (or had NO_VOTE recorded)
   players.forEach(function(p) {
-    var hasBet = gameBets.some(function(b) {
-      return b.playerName === p.name;
+    var playerBet = gameBets.find(function(b) {
+      return b.playerName.trim().toLowerCase() === p.name.trim().toLowerCase();
     });
-    if (!hasBet) {
+    if (!playerBet || playerBet.betOption === 'NO_VOTE') {
       betsUpdates.push({
         gameId: gameId,
         playerName: p.name,
