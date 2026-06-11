@@ -353,19 +353,28 @@ function settlementJob() {
 
     // Check if match is finished
     if (match.status === 'FINISHED') {
-      Logger.log('Settling match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam);
-      
-      var settledGame = settleFinishedGame(
-        localGame,
-        match.score.fullTime.home,
-        match.score.fullTime.away,
-        match.score.winner,
-        players,
-        bets,
-        chatId
-      );
-      
-      gamesToUpdate.push(settledGame);
+      var isScorePresent = match.score && 
+                           match.score.fullTime && 
+                           match.score.fullTime.home !== null && 
+                           match.score.fullTime.away !== null;
+                           
+      if (isScorePresent) {
+        Logger.log('Settling match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam);
+        
+        var settledGame = settleFinishedGame(
+          localGame,
+          match.score.fullTime.home,
+          match.score.fullTime.away,
+          match.score.winner,
+          players,
+          bets,
+          chatId
+        );
+        
+        gamesToUpdate.push(settledGame);
+      } else {
+        Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED, but scores are not yet populated in the API. Skipping settlement for this run.');
+      }
     }
   });
 
