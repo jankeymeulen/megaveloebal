@@ -151,7 +151,7 @@ function generateStandingsText(players) {
     return b.balance - a.balance;
   });
 
-  var text = "🏆 *WK MEGAVELO EBAL STANDINGS* 🏆\n\n";
+  var text = "🏆 * STAND * 🏆\n\n";
   sorted.forEach(function(p, index) {
     var medal = "";
     if (index === 0) medal = "🥇 ";
@@ -160,7 +160,7 @@ function generateStandingsText(players) {
     else medal = (index + 1) + ". ";
 
     var formattedBalance = p.balance % 1 === 0 ? p.balance.toFixed(0) : p.balance.toFixed(1);
-    text += medal + "*" + p.displayName + "*: " + formattedBalance + " coins\n";
+    text += medal + "*" + p.displayName + "*: " + formattedBalance + " miljoen\n";
   });
   return text;
 }
