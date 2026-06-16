@@ -393,8 +393,6 @@ app.post('/generate-image', authenticate, async (req, res) => {
             throw new Error(`Runware API did not return any image URL. Response: ${JSON.stringify(result)}`);
           }
           
-          imageUrl = taskResult.images[0].imageURL;
-          
         } else if (provider === 'xai') {
           const apiKey = process.env.IMAGE_API_KEY || process.env.XAI_API_KEY;
           if (!apiKey) {
