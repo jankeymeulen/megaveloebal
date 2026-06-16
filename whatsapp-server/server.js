@@ -370,16 +370,26 @@ app.post('/generate-image', authenticate, async (req, res) => {
             throw new Error(`Runware API returned errors: ${JSON.stringify(result.errors)}`);
           }
           
-          if (!Array.isArray(result) || result.length === 0) {
+          let taskResult = null;
+          if (Array.isArray(result) && result.length > 0) {
+            taskResult = result[0];
+          } else if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+            taskResult = result.data[0];
+          }
+          
+          if (!taskResult) {
             throw new Error(`Runware API returned invalid response format: ${JSON.stringify(result)}`);
           }
           
-          const taskResult = result[0];
           if (taskResult.error) {
             throw new Error(`Runware task error: ${taskResult.error}`);
           }
           
-          if (!taskResult.images || taskResult.images.length === 0 || !taskResult.images[0].imageURL) {
+          if (taskResult.imageURL) {
+            imageUrl = taskResult.imageURL;
+          } else if (taskResult.images && taskResult.images.length > 0 && taskResult.images[0].imageURL) {
+            imageUrl = taskResult.images[0].imageURL;
+          } else {
             throw new Error(`Runware API did not return any image URL. Response: ${JSON.stringify(result)}`);
           }
           
