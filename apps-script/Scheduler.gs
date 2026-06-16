@@ -54,6 +54,7 @@ function morningJob(dateStr) {
                   "inzet is *" + betCost + "* miljoen.\n" +
                   "Faites votre jeu!";
   sendWhatsAppMessage(chatId, introText);
+  generateAndSendMatchImageForDate(dateStr);
 
   // Send a poll for each match
   todayMatches.forEach(function(match) {

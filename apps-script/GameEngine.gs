@@ -151,7 +151,7 @@ function generateStandingsText(players) {
     return b.balance - a.balance;
   });
 
-  var text = "🏆 * STAND * 🏆\n\n";
+  var text = "🏆 *STAND* 🏆\n\n";
   sorted.forEach(function(p, index) {
     var medal = "";
     if (index === 0) medal = "🥇 ";

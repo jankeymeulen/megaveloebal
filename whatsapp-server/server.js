@@ -320,109 +320,127 @@ app.post('/generate-image', authenticate, async (req, res) => {
       throw new Error('Native fetch is not available. Please upgrade to Node.js 18 or later.');
     }
     
-    let imageUrl = '';
+    const maxAttempts = 3;
+    let lastError = null;
     
-    if (provider === 'runware') {
-      const apiKey = process.env.IMAGE_API_KEY || process.env.RUNWARE_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: 'Runware API Key is not configured (set IMAGE_API_KEY or RUNWARE_API_KEY)' });
-      }
-      
-      const model = process.env.IMAGE_MODEL || process.env.RUNWARE_MODEL || 'xai:grok-imagine@image-quality';
-      const taskUUID = crypto.randomUUID();
-      
-      console.log(`Generating image via Runware for prompt: "${prompt}" using model "${model}"...`);
-      const response = await fetch('https://api.runware.ai/v1', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify([
-          {
-            taskType: 'imageInference',
-            model: model,
-            positivePrompt: prompt,
-            width: 1024,
-            height: 1024,
-            deliveryMethod: 'sync',
-            taskUUID: taskUUID
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        let imageUrl = '';
+        console.log(`Attempt ${attempt} of ${maxAttempts} to generate and send image...`);
+        
+        if (provider === 'runware') {
+          const apiKey = process.env.IMAGE_API_KEY || process.env.RUNWARE_API_KEY;
+          if (!apiKey) {
+            return res.status(500).json({ error: 'Runware API Key is not configured (set IMAGE_API_KEY or RUNWARE_API_KEY)' });
           }
-        ])
-      });
-      
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Runware API error (${response.status}): ${errText}`);
+          
+          const model = process.env.IMAGE_MODEL || process.env.RUNWARE_MODEL || 'xai:grok-imagine@image-quality';
+          const taskUUID = crypto.randomUUID();
+          
+          console.log(`Generating image via Runware for prompt: "${prompt}" using model "${model}" (safety check disabled)...`);
+          const response = await fetch('https://api.runware.ai/v1', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify([
+              {
+                taskType: 'imageInference',
+                model: model,
+                positivePrompt: prompt,
+                width: 1024,
+                height: 1024,
+                deliveryMethod: 'sync',
+                taskUUID: taskUUID,
+                checkNSFW: false
+              }
+            ])
+          });
+          
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Runware API error (${response.status}): ${errText}`);
+          }
+          
+          const result = await response.json();
+          
+          // If the response is an object with errors, or has an error array
+          if (result.errors) {
+            throw new Error(`Runware API returned errors: ${JSON.stringify(result.errors)}`);
+          }
+          
+          if (!Array.isArray(result) || result.length === 0) {
+            throw new Error(`Runware API returned invalid response format: ${JSON.stringify(result)}`);
+          }
+          
+          const taskResult = result[0];
+          if (taskResult.error) {
+            throw new Error(`Runware task error: ${taskResult.error}`);
+          }
+          
+          if (!taskResult.images || taskResult.images.length === 0 || !taskResult.images[0].imageURL) {
+            throw new Error(`Runware API did not return any image URL. Response: ${JSON.stringify(result)}`);
+          }
+          
+          imageUrl = taskResult.images[0].imageURL;
+          
+        } else if (provider === 'xai') {
+          const apiKey = process.env.IMAGE_API_KEY || process.env.XAI_API_KEY;
+          if (!apiKey) {
+            return res.status(500).json({ error: 'xAI API Key is not configured (set IMAGE_API_KEY or XAI_API_KEY)' });
+          }
+          
+          const model = process.env.IMAGE_MODEL || process.env.XAI_MODEL || 'grok-imagine-image-quality';
+          
+          console.log(`Generating image via xAI for prompt: "${prompt}" using model "${model}"...`);
+          const response = await fetch('https://api.x.ai/v1/images/generations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: model,
+              prompt: prompt
+            })
+          });
+          
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`xAI API error (${response.status}): ${errText}`);
+          }
+          
+          const result = await response.json();
+          if (!result.data || result.data.length === 0 || !result.data[0].url) {
+            throw new Error('xAI API did not return any image URL');
+          }
+          
+          imageUrl = result.data[0].url;
+        } else {
+          return res.status(400).json({ error: `Unsupported image provider: ${provider}` });
+        }
+        
+        console.log(`Image generated. Downloading from: ${imageUrl}`);
+        
+        // Download and serialize image using MessageMedia
+        const media = await MessageMedia.fromUrl(imageUrl);
+        
+        console.log(`Sending image to JID: ${groupid}`);
+        const msg = await client.sendMessage(groupid, media);
+        
+        return res.json({ success: true, messageId: msg.id._serialized });
+      } catch (err) {
+        console.error(`Attempt ${attempt} failed:`, err.message);
+        lastError = err;
+        if (attempt < maxAttempts) {
+          // Wait 2 seconds before retrying
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
       }
-      
-      const result = await response.json();
-      
-      // If the response is an object with errors, or has an error array
-      if (result.errors) {
-        throw new Error(`Runware API returned errors: ${JSON.stringify(result.errors)}`);
-      }
-      
-      if (!Array.isArray(result) || result.length === 0) {
-        throw new Error(`Runware API returned invalid response format: ${JSON.stringify(result)}`);
-      }
-      
-      const taskResult = result[0];
-      if (taskResult.error) {
-        throw new Error(`Runware task error: ${taskResult.error}`);
-      }
-      
-      if (!taskResult.images || taskResult.images.length === 0 || !taskResult.images[0].imageURL) {
-        throw new Error(`Runware API did not return any image URL. Response: ${JSON.stringify(result)}`);
-      }
-      
-      imageUrl = taskResult.images[0].imageURL;
-      
-    } else if (provider === 'xai') {
-      const apiKey = process.env.IMAGE_API_KEY || process.env.XAI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: 'xAI API Key is not configured (set IMAGE_API_KEY or XAI_API_KEY)' });
-      }
-      
-      const model = process.env.IMAGE_MODEL || process.env.XAI_MODEL || 'grok-imagine-image-quality';
-      
-      console.log(`Generating image via xAI for prompt: "${prompt}" using model "${model}"...`);
-      const response = await fetch('https://api.x.ai/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: model,
-          prompt: prompt
-        })
-      });
-      
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`xAI API error (${response.status}): ${errText}`);
-      }
-      
-      const result = await response.json();
-      if (!result.data || result.data.length === 0 || !result.data[0].url) {
-        throw new Error('xAI API did not return any image URL');
-      }
-      
-      imageUrl = result.data[0].url;
-    } else {
-      return res.status(400).json({ error: `Unsupported image provider: ${provider}` });
     }
     
-    console.log(`Image generated. Downloading from: ${imageUrl}`);
-    
-    // Download and serialize image using MessageMedia
-    const media = await MessageMedia.fromUrl(imageUrl);
-    
-    console.log(`Sending image to JID: ${groupid}`);
-    const msg = await client.sendMessage(groupid, media);
-    
-    res.json({ success: true, messageId: msg.id._serialized });
+    throw new Error(`All ${maxAttempts} attempts to generate and send the image failed. Last error: ${lastError.message}`);
   } catch (error) {
     console.error('Error generating or sending image:', error);
     res.status(500).json({ error: error.message });
