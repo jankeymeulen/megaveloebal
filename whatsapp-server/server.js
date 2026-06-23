@@ -280,23 +280,89 @@ app.post('/delete-message', authenticate, async (req, res) => {
   if (!chatId || !messageId) {
     return res.status(400).json({ error: 'Missing chatId or messageId' });
   }
+  
   try {
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
     }
-    const msg = await client.getMessageById(messageId);
-    if (!msg) {
-      return res.status(404).json({ error: 'Message not found' });
+    
+    const maxAttempts = 3;
+    let deletedSuccessfully = false;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`Attempt ${attempt} of ${maxAttempts} to delete message ${messageId}...`);
+        
+        let msg = null;
+        try {
+          msg = await client.getMessageById(messageId);
+        } catch (fetchErr) {
+          console.log(`Message not found or fetch failed (likely already deleted): ${fetchErr.message}`);
+          deletedSuccessfully = true;
+          break;
+        }
+        
+        if (!msg) {
+          console.log(`Message not found (likely already deleted).`);
+          deletedSuccessfully = true;
+          break;
+        }
+        
+        if (msg.type === 'revoked') {
+          console.log(`Message is already revoked (deleted for everyone).`);
+          deletedSuccessfully = true;
+          break;
+        }
+        
+        // Try to delete for everyone (revoking)
+        try {
+          await msg.delete(true);
+          console.log(`Sent delete command (delete for everyone) for message ${messageId}.`);
+        } catch (deleteErr) {
+          console.warn('Delete for everyone failed, attempting local deletion (delete for me):', deleteErr.message);
+          // Fallback: delete only for me (necessary in self-chats)
+          await msg.delete(false);
+          deletedSuccessfully = true;
+          break;
+        }
+        
+        // Wait 1.5 seconds for the revocation state to propagate and sync
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Retrieve message again to verify revocation status
+        let checkMsg = null;
+        try {
+          checkMsg = await client.getMessageById(messageId);
+        } catch (checkErr) {
+          console.log(`Fetch after deletion failed, message is likely deleted: ${checkErr.message}`);
+          deletedSuccessfully = true;
+          break;
+        }
+        
+        if (!checkMsg || checkMsg.type === 'revoked') {
+          console.log(`Verification confirmed: message ${messageId} is deleted.`);
+          deletedSuccessfully = true;
+          break;
+        }
+        
+        console.warn(`Message ${messageId} still exists (type: ${checkMsg.type}). Retrying...`);
+        
+      } catch (err) {
+        console.error(`Deletion attempt ${attempt} failed with error:`, err);
+        lastError = err;
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
     }
-    // Try to delete for everyone (revoking)
-    try {
-      await msg.delete(true);
-    } catch (deleteErr) {
-      console.warn('Delete for everyone failed, attempting local deletion (delete for me):', deleteErr.message);
-      // Fallback: delete only for me (necessary in self-chats)
-      await msg.delete(false);
+    
+    if (deletedSuccessfully) {
+      res.json({ success: true });
+    } else {
+      res.status(500).json({ error: `Failed to delete message after ${maxAttempts} attempts. Last error: ${lastError ? lastError.message : 'Unknown'}` });
     }
-    res.json({ success: true });
+    
   } catch (error) {
     console.error('Error deleting message:', error);
     res.status(500).json({ error: error.message });
