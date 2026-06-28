@@ -6,19 +6,28 @@
  * Determines the cost of a bet for a given stage of the World Cup.
  */
 function getBetCost(stage) {
-  switch (stage) {
+  if (!stage) return 1;
+  switch (stage.trim().toUpperCase()) {
     case 'GROUP_STAGE':
       return 1;
+    case 'LAST_32':
+    case 'ROUND_OF_32':
+      return 2;
     case 'LAST_16':
     case 'ROUND_OF_16':
-      return 2;
-    case 'QUARTER_FINALS':
       return 4;
-    case 'SEMI_FINALS':
+    case 'QUARTER_FINALS':
+    case 'LAST_8':
+    case 'ROUND_OF_8':
       return 8;
+    case 'SEMI_FINALS':
+    case 'LAST_4':
+    case 'ROUND_OF_4':
+      return 16;
     case 'THIRD_PLACE':
       return 8;
     case 'FINAL':
+    case 'FINALS':
       return 32;
     default:
       return 1;

@@ -7,24 +7,34 @@
 function calculateWinnings(players, bets, gameId, stage, result) {
   // 1. Determine bet cost based on stage
   let betCost = 1;
-  switch (stage) {
+  if (!stage) stage = 'GROUP_STAGE';
+  switch (stage.trim().toUpperCase()) {
     case 'GROUP_STAGE':
       betCost = 1;
       break;
-    case 'LAST_16':
-    case 'ROUND_OF_16':
+    case 'LAST_32':
+    case 'ROUND_OF_32':
       betCost = 2;
       break;
-    case 'QUARTER_FINALS':
+    case 'LAST_16':
+    case 'ROUND_OF_16':
       betCost = 4;
       break;
-    case 'SEMI_FINALS':
+    case 'QUARTER_FINALS':
+    case 'LAST_8':
+    case 'ROUND_OF_8':
       betCost = 8;
+      break;
+    case 'SEMI_FINALS':
+    case 'LAST_4':
+    case 'ROUND_OF_4':
+      betCost = 16;
       break;
     case 'THIRD_PLACE':
       betCost = 8;
       break;
     case 'FINAL':
+    case 'FINALS':
       betCost = 32;
       break;
     default:
@@ -191,15 +201,15 @@ assertEquals(
 );
 
 
-// --- Test Scenario B: Round of 16 (Bet cost = 2) ---
+// --- Test Scenario B: Round of 16 (Bet cost = 4) ---
 // Alice (HOME_WIN), Bob (HOME_WIN), Charlie (AWAY_WIN). Dave/Eve didn't vote.
 // HOME_WIN wins.
 // Expected Ending Balances:
-// - Alice: 126 (winner, got bet 2 back + 1 coin winnings. Net +1)
-// - Bob: 126 (winner, got bet 2 back + 1 coin winnings. Net +1)
-// - Charlie: 123 (loser, lost 2. Net -2)
-// - Dave: 123 (no vote, lost 2, burned)
-// - Eve: 123 (no vote, lost 2, burned)
+// - Alice: 127 (winner, got bet 4 back + 2 coin winnings. Net +2)
+// - Bob: 127 (winner, got bet 4 back + 2 coin winnings. Net +2)
+// - Charlie: 121 (loser, lost 4. Net -4)
+// - Dave: 121 (no vote, lost 4, burned)
+// - Eve: 121 (no vote, lost 4, burned)
 const playersB = [
   { name: 'Alice', balance: 125 },
   { name: 'Bob', balance: 125 },
@@ -215,13 +225,13 @@ const betsB = [
 ];
 const resultB = calculateWinnings(playersB, betsB, 'g2', 'ROUND_OF_16', 'HOME_WIN');
 assertEquals(
-  resultB.updatedPlayers.find(p => p.name === 'Alice').balance, 126, 'Scenario B - Alice Balance'
+  resultB.updatedPlayers.find(p => p.name === 'Alice').balance, 127, 'Scenario B - Alice Balance'
 );
 assertEquals(
-  resultB.updatedPlayers.find(p => p.name === 'Charlie').balance, 123, 'Scenario B - Charlie Balance'
+  resultB.updatedPlayers.find(p => p.name === 'Charlie').balance, 121, 'Scenario B - Charlie Balance'
 );
 assertEquals(
-  resultB.updatedPlayers.find(p => p.name === 'Dave').balance, 123, 'Scenario B - Dave Balance'
+  resultB.updatedPlayers.find(p => p.name === 'Dave').balance, 121, 'Scenario B - Dave Balance'
 );
 
 
