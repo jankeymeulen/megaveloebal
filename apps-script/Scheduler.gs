@@ -360,13 +360,29 @@ function settlementJob() {
                            match.score.fullTime.away !== null;
                            
       if (isScorePresent) {
+        var winner = match.score.winner;
+        
+        // Safeguard for knockout stage matches
+        if (localGame.stage !== 'GROUP_STAGE') {
+          if (winner !== 'HOME_TEAM' && winner !== 'AWAY_TEAM') {
+            Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED (Knockout), but winner is "' + winner + '". Skipping settlement until definitive winner is populated.');
+            return;
+          }
+        } else {
+          // For Group Stage, winner must not be null/undefined (can be HOME_TEAM, AWAY_TEAM, or DRAW)
+          if (winner !== 'HOME_TEAM' && winner !== 'AWAY_TEAM' && winner !== 'DRAW') {
+            Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED (Group), but winner is null/invalid. Skipping settlement.');
+            return;
+          }
+        }
+        
         Logger.log('Settling match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam);
         
         var settledGame = settleFinishedGame(
           localGame,
           match.score.fullTime.home,
           match.score.fullTime.away,
-          match.score.winner,
+          winner,
           players,
           bets,
           chatId
