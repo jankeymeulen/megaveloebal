@@ -19,6 +19,14 @@ function getOrCreateSheet(name, headers) {
     for (var i = 0; i < headers.length; i++) {
       sheet.setColumnWidth(i + 1, 150);
     }
+  } else {
+    var currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (currentHeaders.length < headers.length) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+      for (var i = currentHeaders.length; i < headers.length; i++) {
+        sheet.setColumnWidth(i + 1, 150);
+      }
+    }
   }
   return sheet;
 }
@@ -73,12 +81,25 @@ function updatePlayerBalances(balanceUpdates) {
 function getGames() {
   var sheet = getOrCreateSheet(GAMES_SHEET_NAME, [
     'Game ID', 'Date Time (UTC)', 'Stage', 'Home Team', 'Away Team', 
-    'Status', 'Score Home', 'Score Away', 'Result', 'Bet Cost', 'Poll Message ID', 'Settled'
+    'Status', 'Score Home', 'Score Away', 'Result', 'Bet Cost', 'Poll Message ID', 'Settled', 'Notification Sent'
   ]);
   var data = sheet.getDataRange().getValues();
   var games = [];
   for (var i = 1; i < data.length; i++) {
     if (data[i][0]) {
+      var settled = data[i][11] === true || data[i][11].toString().toUpperCase() === 'TRUE';
+      var notificationSentVal = data[i][12];
+      var notificationSent = false;
+      if (settled) {
+        // Legacy Safeguard: if a game is already settled but the column M cell is blank/undefined,
+        // treat it as already sent to prevent resending notifications for legacy games.
+        if (notificationSentVal === '' || notificationSentVal === undefined || notificationSentVal === null) {
+          notificationSent = true;
+        } else {
+          notificationSent = notificationSentVal === true || notificationSentVal.toString().toUpperCase() === 'TRUE';
+        }
+      }
+      
       games.push({
         id: data[i][0].toString().trim(),
         dateTime: data[i][1],
@@ -91,7 +112,8 @@ function getGames() {
         result: data[i][8].toString().trim(),
         betCost: Number(data[i][9]) || 1,
         pollMessageId: data[i][10].toString().trim(),
-        settled: data[i][11] === true || data[i][11].toString().toUpperCase() === 'TRUE',
+        settled: settled,
+        notificationSent: notificationSent,
         rowIndex: i + 1
       });
     }
@@ -105,7 +127,7 @@ function getGames() {
 function saveGames(gamesList) {
   var sheet = getOrCreateSheet(GAMES_SHEET_NAME, [
     'Game ID', 'Date Time (UTC)', 'Stage', 'Home Team', 'Away Team', 
-    'Status', 'Score Home', 'Score Away', 'Result', 'Bet Cost', 'Poll Message ID', 'Settled'
+    'Status', 'Score Home', 'Score Away', 'Result', 'Bet Cost', 'Poll Message ID', 'Settled', 'Notification Sent'
   ]);
   var existingGames = getGames();
   var gameMap = {};
@@ -126,7 +148,8 @@ function saveGames(gamesList) {
       g.result || '',
       g.betCost,
       g.pollMessageId || '',
-      g.settled === true
+      g.settled === true,
+      g.notificationSent === true
     ];
     
     if (gameMap.hasOwnProperty(g.id)) {
@@ -144,7 +167,7 @@ function saveGames(gamesList) {
 function updateGamePollId(gameId, pollMessageId) {
   var sheet = getOrCreateSheet(GAMES_SHEET_NAME, [
     'Game ID', 'Date Time (UTC)', 'Stage', 'Home Team', 'Away Team', 
-    'Status', 'Score Home', 'Score Away', 'Result', 'Bet Cost', 'Poll Message ID', 'Settled'
+    'Status', 'Score Home', 'Score Away', 'Result', 'Bet Cost', 'Poll Message ID', 'Settled', 'Notification Sent'
   ]);
   var games = getGames();
   for (var i = 0; i < games.length; i++) {

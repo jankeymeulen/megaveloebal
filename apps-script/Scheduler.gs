@@ -97,7 +97,8 @@ function morningJob(dateStr) {
       result: '',
       betCost: betCost,
       pollMessageId: pollMessageId,
-      settled: false
+      settled: false,
+      notificationSent: false
     });
   });
 
@@ -241,7 +242,7 @@ function deadlineJob(dateStr) {
  * Executes scoring settlement and distributes coins for a finished game.
  * Shared between scheduled cron checks and manual game simulations.
  */
-function settleFinishedGame(localGame, scoreHome, scoreAway, winnerKey, players, bets, chatId) {
+function settleFinishedGame(localGame, scoreHome, scoreAway, winnerKey, players, bets) {
   var result = '';
   if (winnerKey === 'HOME_TEAM') {
     result = 'HOME_WIN';
@@ -270,47 +271,64 @@ function settleFinishedGame(localGame, scoreHome, scoreAway, winnerKey, players,
   updatePlayerBalances(settlement.balanceUpdates);
   recordBetsBatch(settlement.betsUpdates);
 
-  // 3. Mark game as settled
+  // 3. Mark game as settled, pending notification
   localGame.status = 'FINISHED';
   localGame.scoreHome = scoreHome;
   localGame.scoreAway = scoreAway;
   localGame.result = result;
   localGame.settled = true;
-
-  // 4. Create and send announcement
-  var winnersList = settlement.betsUpdates.filter(function(b) { return b.result === 'WIN'; }).map(function(b) {
-    var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
-    return p ? p.displayName : b.playerName;
-  });
-  var losersList = settlement.betsUpdates.filter(function(b) { return b.result === 'LOSE'; }).map(function(b) {
-    var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
-    return p ? p.displayName : b.playerName;
-  });
-  var noVotersList = settlement.betsUpdates.filter(function(b) { return b.result === 'NO_VOTE'; }).map(function(b) {
-    var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
-    return p ? p.displayName : b.playerName;
-  });
-
-  var betCost = getBetCost(localGame.stage);
-  var totalLosingPool = losersList.length * betCost;
-  var winDiffStr = winnersList.length > 0 ? ' (+' + (totalLosingPool / winnersList.length).toFixed(1) + ')' : '';
-
-  var resultMessage = "⚽ *MATCH GEDAAN* ⚽\n\n" +
-                      "*" + localGame.homeTeam + "* " + scoreHome + " - " + scoreAway + " *" + localGame.awayTeam + "*\n\n" +
-                      "✅ Winnaars" + winDiffStr + ": " + (winnersList.length > 0 ? winnersList.join(', ') : "_None_") + "\n" +
-                      "❌ Verliezers (-" + betCost.toFixed(1) + "): " + (losersList.length > 0 ? losersList.join(', ') : "_None_") + "\n" +
-                      "🛋️ Bankzitters (-" + betCost.toFixed(1) + "): " + (noVotersList.length > 0 ? noVotersList.join(', ') : "_None_") + "\n\n" +
-                      generateStandingsText(players);
-
-  sendWhatsAppMessage(chatId, resultMessage);
+  localGame.notificationSent = false;
   
   return localGame;
 }
 
 /**
+ * Reconstructs the settlement result lists and sends the WhatsApp announcement message.
+ * Returns true if successful, false otherwise.
+ */
+function sendGameSettlementAnnouncement(localGame, players, bets, chatId) {
+  try {
+    var gameBets = bets.filter(function(b) {
+      return b.gameId === localGame.id;
+    });
+
+    var winnersList = gameBets.filter(function(b) { return b.result === 'WIN'; }).map(function(b) {
+      var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
+      return p ? p.displayName : b.playerName;
+    });
+    var losersList = gameBets.filter(function(b) { return b.result === 'LOSE'; }).map(function(b) {
+      var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
+      return p ? p.displayName : b.playerName;
+    });
+    var noVotersList = gameBets.filter(function(b) { return b.result === 'NO_VOTE'; }).map(function(b) {
+      var p = players.find(function(pl) { return pl.name.trim().toLowerCase() === b.playerName.trim().toLowerCase(); });
+      return p ? p.displayName : b.playerName;
+    });
+
+    var betCost = getBetCost(localGame.stage);
+    var totalLosingPool = losersList.length * betCost;
+    var winDiffStr = winnersList.length > 0 ? ' (+' + (totalLosingPool / winnersList.length).toFixed(1) + ')' : '';
+
+    var resultMessage = "⚽ *MATCH GEDAAN* ⚽\n\n" +
+                        "*" + localGame.homeTeam + "* " + localGame.scoreHome + " - " + localGame.scoreAway + " *" + localGame.awayTeam + "*\n\n" +
+                        "✅ Winnaars" + winDiffStr + ": " + (winnersList.length > 0 ? winnersList.join(', ') : "_None_") + "\n" +
+                        "❌ Verliezers (-" + betCost.toFixed(1) + "): " + (losersList.length > 0 ? losersList.join(', ') : "_None_") + "\n" +
+                        "🛋️ Bankzitters (-" + betCost.toFixed(1) + "): " + (noVotersList.length > 0 ? noVotersList.join(', ') : "_None_") + "\n\n" +
+                        generateStandingsText(players);
+
+    sendWhatsAppMessage(chatId, resultMessage);
+    return true;
+  } catch (e) {
+    Logger.log('ERROR: Failed to send WhatsApp announcement for match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ': ' + e.toString());
+    return false;
+  }
+}
+
+/**
  * settlementJob()
- * Checks for finished matches on the Football-Data API, updates scores,
- * distributes winnings, and updates standings in the group chat.
+ * Decoupled into two phases:
+ * Phase 1: Checks for finished games, runs settlement calculations, and marks them as settled in sheet.
+ * Phase 2: Sends pending announcements for settled games and marks notificationSent = true.
  */
 function settlementJob() {
   var chatId = getConfig('WHATSAPP_GROUP_ID');
@@ -327,79 +345,110 @@ function settlementJob() {
     return !g.settled;
   });
 
-  if (unsettledGames.length === 0) {
-    Logger.log('No unsettled games found in database.');
-    return;
-  }
-
-  var matchIds = unsettledGames.map(function(g) { return g.id; });
-  var updatedMatches = [];
-  try {
-    updatedMatches = fetchMatchStates(matchIds);
-  } catch (e) {
-    Logger.log('Error fetching match states: ' + e.toString());
-    return;
-  }
-
   var players = getPlayers();
   var bets = getBets();
   var gamesToUpdate = [];
 
-  updatedMatches.forEach(function(match) {
-    var localGame = unsettledGames.find(function(g) {
-      return g.id === match.id.toString();
+  if (unsettledGames.length > 0) {
+    var matchIds = unsettledGames.map(function(g) { return g.id; });
+    var updatedMatches = [];
+    try {
+      updatedMatches = fetchMatchStates(matchIds);
+    } catch (e) {
+      Logger.log('Error fetching match states: ' + e.toString());
+      return;
+    }
+
+    updatedMatches.forEach(function(match) {
+      var localGame = unsettledGames.find(function(g) {
+        return g.id === match.id.toString();
+      });
+
+      if (!localGame) return;
+
+      // Check if match is finished
+      if (match.status === 'FINISHED') {
+        var isScorePresent = match.score && 
+                             match.score.fullTime && 
+                             match.score.fullTime.home !== null && 
+                             match.score.fullTime.away !== null;
+                             
+        if (isScorePresent) {
+          var winner = match.score.winner;
+          
+          // Safeguard for knockout stage matches
+          if (localGame.stage !== 'GROUP_STAGE') {
+            if (winner !== 'HOME_TEAM' && winner !== 'AWAY_TEAM') {
+              Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED (Knockout), but winner is "' + winner + '". Skipping settlement until definitive winner is populated.');
+              return;
+            }
+          } else {
+            // For Group Stage, winner must not be null/undefined (can be HOME_TEAM, AWAY_TEAM, or DRAW)
+            if (winner !== 'HOME_TEAM' && winner !== 'AWAY_TEAM' && winner !== 'DRAW') {
+              Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED (Group), but winner is null/invalid. Skipping settlement.');
+              return;
+            }
+          }
+          
+          Logger.log('Settling match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam);
+          
+          var settledGame = settleFinishedGame(
+            localGame,
+            match.score.fullTime.home,
+            match.score.fullTime.away,
+            winner,
+            players,
+            bets
+          );
+          
+          gamesToUpdate.push(settledGame);
+        } else {
+          Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED, but scores are not yet populated in the API. Skipping settlement for this run.');
+        }
+      }
     });
 
-    if (!localGame) return;
-
-    // Check if match is finished
-    if (match.status === 'FINISHED') {
-      var isScorePresent = match.score && 
-                           match.score.fullTime && 
-                           match.score.fullTime.home !== null && 
-                           match.score.fullTime.away !== null;
-                           
-      if (isScorePresent) {
-        var winner = match.score.winner;
-        
-        // Safeguard for knockout stage matches
-        if (localGame.stage !== 'GROUP_STAGE') {
-          if (winner !== 'HOME_TEAM' && winner !== 'AWAY_TEAM') {
-            Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED (Knockout), but winner is "' + winner + '". Skipping settlement until definitive winner is populated.');
-            return;
-          }
-        } else {
-          // For Group Stage, winner must not be null/undefined (can be HOME_TEAM, AWAY_TEAM, or DRAW)
-          if (winner !== 'HOME_TEAM' && winner !== 'AWAY_TEAM' && winner !== 'DRAW') {
-            Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED (Group), but winner is null/invalid. Skipping settlement.');
-            return;
-          }
-        }
-        
-        Logger.log('Settling match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam);
-        
-        var settledGame = settleFinishedGame(
-          localGame,
-          match.score.fullTime.home,
-          match.score.fullTime.away,
-          winner,
-          players,
-          bets,
-          chatId
-        );
-        
-        gamesToUpdate.push(settledGame);
-      } else {
-        Logger.log('Match ' + localGame.homeTeam + ' vs ' + localGame.awayTeam + ' is FINISHED, but scores are not yet populated in the API. Skipping settlement for this run.');
-      }
+    if (gamesToUpdate.length > 0) {
+      saveGames(gamesToUpdate);
+      Logger.log('Settled calculation for ' + gamesToUpdate.length + ' games in database.');
     }
+  } else {
+    Logger.log('No unsettled games found in database.');
+  }
+
+  // --- PHASE 2: Send pending WhatsApp notifications ---
+  // Re-fetch all games to get the latest status (including those just settled in Phase 1)
+  var allGames = getGames();
+  var gamesPendingNotification = allGames.filter(function(g) {
+    return g.settled === true && g.notificationSent !== true;
   });
 
-  if (gamesToUpdate.length > 0) {
-    saveGames(gamesToUpdate);
-    Logger.log('Settled ' + gamesToUpdate.length + ' games.');
+  if (gamesPendingNotification.length > 0) {
+    Logger.log('Found ' + gamesPendingNotification.length + ' games pending WhatsApp announcement.');
+    
+    // Refresh players and bets to ensure announcement has latest standings/result classifications
+    var latestPlayers = getPlayers();
+    var latestBets = getBets();
+    var notificationsToUpdate = [];
+
+    gamesPendingNotification.forEach(function(g) {
+      Logger.log('Attempting to send announcement for ' + g.homeTeam + ' vs ' + g.awayTeam);
+      var success = sendGameSettlementAnnouncement(g, latestPlayers, latestBets, chatId);
+      if (success) {
+        g.notificationSent = true;
+        notificationsToUpdate.push(g);
+        Logger.log('WhatsApp announcement sent successfully for ' + g.homeTeam + ' vs ' + g.awayTeam);
+      } else {
+        // Log critical console error so it shows up in Google Apps Script execution logs for operators
+        console.error('CRITICAL ERROR: Failed to send WhatsApp announcement for game ' + g.homeTeam + ' vs ' + g.awayTeam + ' (ID: ' + g.id + '). Operator intervention is required.');
+      }
+    });
+
+    if (notificationsToUpdate.length > 0) {
+      saveGames(notificationsToUpdate);
+    }
   } else {
-    Logger.log('No new games completed in this run.');
+    Logger.log('No games pending WhatsApp announcement.');
   }
 }
 

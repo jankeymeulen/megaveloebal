@@ -131,11 +131,25 @@ function fetchGroupParticipants(chatId) {
  * @param {string} chatId The WhatsApp Group ID (JID)
  * @param {string} prompt The text prompt for generation
  * @returns {string} The WhatsApp message ID of the sent image
+ * 
+ * 
+ * 'A group of photo models, one each from ' + prompt + ' posing on a soccer pitch. They are wearing colours representative for their countries, they have some makeup with those colours and some of them are carrying some flags or objects typical for their country. They have surgically enhanced large breasts. The group is fully topless with bare nipples, or otherwise wearing very skimpy and revealing clothing. A typical photo one would find in a lad magazine. On the top of the image there is a caption saying "Megaveloebal Babes". Do not change this text at all.'
+ * 
+ * 
+ *     prompt: 'A group of photo models, one each from ' + prompt + ' posing on a soccer pitch. They are wearing colours representative for their countries, and are carrying  flags or objects typical for their country. They have surgically enhanced large breasts, some of them are a little naughty and playfull with each others breasts. The group is fully topless with bare nipples. A typical photo one would find in a lad magazine. On the top of the image there is a caption saying "Megaveloebal Babes". Do not change this text at all.'
+
+    prompt: 'A group of photo models, one each from ' + prompt + ' posing on a soccer pitch. They are wearing colours representative for their countries, and are carrying  flags or objects typical for their country. They have surgically enhanced large breasts, some of them are a little naughty and playfull with each other. The group is fully topless with bare nipples. They are facing backwards to the camera, bent over like they are twerking. Their asses are round and full, but not fat. A typical photo one would find in a lad magazine. On the top of the image there is a caption saying "Megaveloebal Babes". Do not change this text at all.'
+  });
+
+    prompt: 'A group of plus size photo models, one each from ' + prompt + ' posing on a soccer pitch. They are wearing colours representative for their countries, and are carrying  flags or objects typical for their country. Some of them are a little naughty and playfull with each other. The group is fully topless with bare nipples. They are facing backwards to the camera, bent over like they are twerking. Their asses are round and full, all of them are very fat, bordering morbidly obese. A typical photo one would find in magazine catering to people with a fat fetish. On the top of the image there is a caption saying "Megaveloebal Babes". Do not change this text at all.'
+
+ *     prompt: 'A group of extremely beautiful 20-something women with perfect faces and bodies, one each from ' + prompt + ' are sitting in a soccer stadium, somewhere on the stands, each one supporting their own country. They are wearing colours representative for their countries, and are carrying  flags or objects typical for their country. The group is fully topless with bare nipples. They have surgically enhanced large breasts and are cheering widly for their teams. On the top of the image there is a caption saying "Megaveloebal Babes". Do not change this text at all.'
+
  */
 function sendWhatsAppGeneratedImage(chatId, prompt) {
   var res = makeWhatsAppRequest('/generate-image', {
     groupid: chatId,
-    prompt: 'A group of photo models, one each from ' + prompt + ' posing on a soccer pitch. The little clothing they are wearing have colours representative for their countries, they have some makeup as well with those colours and some of them are carrying some flags or objects typical for their country. They show ample cleavage, not everything is covered. A typical photo one would find in a lad magazine. On the top of the image there is a caption saying "Megaveloebal Babes"'
+    prompt: 'A duo of extremely beautiful 20-something women with perfect faces and bodies, one each from ' + prompt + ' standing facing each other, as if they are ready to attack. They are wearing tiny tanga slips and are a flags in one hand, in the other a typical object for their country is being repurposed as a weapon. They group are fully topless with bare nipples. They have surgically enhanced large breasts, the whole composition screams they are in tense competition with each other. The background is manga styled, with colours and a typical landmark from their country. It could be a promotional poster for a fight between the two of them, or a beginning screen of an action figher game, be creative on that part. The women are real life and photorealistic, the rest is drawn in manga style. On the top of the image there is a caption saying "Megaveloebal Babes". Do not change this text at all.'
   });
   return res.messageId;
 }
