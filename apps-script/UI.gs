@@ -24,6 +24,8 @@ function onOpen() {
     .addItem('Send test message to specific JID', 'menuSendTestMessage')
     .addItem('Send match day image...', 'menuSendMatchImageForDate')
     .addItem('Run interactive end-to-end test', 'menuRunInteractiveTest')
+    .addSeparator()
+    .addItem('Recover Fallback Poll IDs', 'menuRecoverFallbackPollIds')
     .addToUi();
 }
 
@@ -355,5 +357,21 @@ function menuSendMatchImageForDate() {
     ui.alert('Success', 'Image generation requested for ' + dateStr + '.', ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Error', 'Execution failed: ' + e.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Custom menu trigger to recover fallback poll message IDs.
+ */
+function menuRecoverFallbackPollIds() {
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.alert('Recover Fallback Poll IDs', 'Are you sure you want to search for fallback poll IDs and recover their real WhatsApp message IDs?', ui.ButtonSet.YES_NO);
+  if (response === ui.Button.YES) {
+    try {
+      var recoveredCount = recoverFallbackPollIds();
+      ui.alert('Completed', 'Recovery complete!\n\nSuccessfully recovered and updated ' + recoveredCount + ' poll ID(s) in the Games sheet.', ui.ButtonSet.OK);
+    } catch (e) {
+      ui.alert('Error', 'Recovery failed: ' + e.toString(), ui.ButtonSet.OK);
+    }
   }
 }

@@ -153,3 +153,24 @@ function sendWhatsAppGeneratedImage(chatId, prompt) {
   });
   return res.messageId;
 }
+
+/**
+ * Searches recent messages in a WhatsApp group for a poll matching the given title
+ * and returns its true message ID.
+ * @param {string} chatId The WhatsApp Group ID (JID)
+ * @param {string} title The poll title (e.g. "Netherlands - England")
+ * @returns {string|null} The real poll message ID, or null if not found
+ */
+function findWhatsAppPollId(chatId, title) {
+  try {
+    var res = makeWhatsAppRequest('/find-poll-id', {
+      chatId: chatId,
+      title: title,
+      limit: 100
+    });
+    return res.messageId;
+  } catch (e) {
+    Logger.log('Failed to find poll ID for "' + title + '": ' + e.toString());
+    return null;
+  }
+}

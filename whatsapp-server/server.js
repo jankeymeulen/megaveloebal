@@ -204,6 +204,45 @@ app.post('/send-poll', authenticate, async (req, res) => {
   }
 });
 
+app.post('/find-poll-id', authenticate, async (req, res) => {
+  const { chatId, title, limit = 100 } = req.body;
+  if (!chatId || !title) {
+    return res.status(400).json({ error: 'Missing chatId or title' });
+  }
+  try {
+    if (clientStatus !== 'CONNECTED') {
+      return res.status(503).json({ error: 'WhatsApp client is not connected' });
+    }
+    const chat = await client.getChatById(chatId);
+    const messages = await chat.fetchMessages({ limit: parseInt(limit, 10) || 100 });
+    
+    let foundMsg = null;
+    // Search from most recent to oldest
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      const isPoll = msg.type === 'poll_creation' || msg.type === 'poll' || !!msg.pollName || (msg._data && (!!msg._data.pollName || msg._data.type === 'poll_creation'));
+      if (isPoll) {
+        const pollName = msg.pollName || (msg._data && msg._data.pollName) || msg.body || '';
+        if (pollName.toLowerCase().includes(title.toLowerCase())) {
+          foundMsg = msg;
+          break;
+        }
+      }
+    }
+    
+    if (foundMsg) {
+      console.log(`Found poll message ID for "${title}": ${foundMsg.id._serialized}`);
+      res.json({ success: true, messageId: foundMsg.id._serialized });
+    } else {
+      console.log(`Poll message for "${title}" not found in the last ${limit} messages.`);
+      res.status(404).json({ error: `Poll message not found for title: ${title}` });
+    }
+  } catch (error) {
+    console.error('Error finding poll ID:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/get-poll-votes', authenticate, async (req, res) => {
   const { chatId, messageId } = req.body;
   if (!chatId || !messageId) {

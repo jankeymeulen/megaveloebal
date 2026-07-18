@@ -638,3 +638,39 @@ function generateAndSendMatchImageForDate(dateStr) {
     throw err;
   }
 }
+
+/**
+ * Scans the Games sheet for any entries with a fallback poll message ID,
+ * queries the WhatsApp proxy server to find their real message ID,
+ * and updates the sheet.
+ */
+function recoverFallbackPollIds() {
+  var chatId = getConfig('WHATSAPP_GROUP_ID');
+  if (!chatId) {
+    throw new Error('WHATSAPP_GROUP_ID is not configured in the Config sheet.');
+  }
+
+  var games = getGames();
+  var recoveredCount = 0;
+  
+  for (var i = 0; i < games.length; i++) {
+    var game = games[i];
+    var pollId = game.pollMessageId || '';
+    
+    if (pollId.indexOf('fallback_') === 0) {
+      var pollTitle = game.homeTeam + " - " + game.awayTeam;
+      Logger.log('Found fallback poll ID for game ' + game.id + ' (' + pollTitle + '). Attempting recovery...');
+      
+      var realPollId = findWhatsAppPollId(chatId, pollTitle);
+      if (realPollId) {
+        updateGamePollId(game.id, realPollId);
+        Logger.log('Successfully recovered poll ID for ' + pollTitle + ': ' + realPollId);
+        recoveredCount++;
+      } else {
+        Logger.log('Could not find poll ID for ' + pollTitle + ' on WhatsApp.');
+      }
+    }
+  }
+  
+  return recoveredCount;
+}
