@@ -218,9 +218,27 @@ app.post('/find-poll-id', authenticate, async (req, res) => {
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
     }
-    const chat = await client.getChatById(chatId);
-    const messages = await chat.fetchMessages({ limit: parseInt(limit, 10) || 100 });
-    
+    // Fetch raw messages directly from the browser context to bypass getChatById
+    const messages = await client.pupPage.evaluate((chatId, limit) => {
+      const chat = window.Store.Chat.get(chatId);
+      if (!chat) return null;
+      const msgs = chat.msgs.getModelsArray() || [];
+      return msgs.slice(-limit).map(m => ({
+        id: m.id ? m.id._serialized : null,
+        type: m.type,
+        body: m.body,
+        pollName: m.pollName,
+        _data: {
+          type: m.type,
+          pollName: m.pollName
+        }
+      }));
+    }, chatId, parseInt(limit, 10) || 100);
+
+    if (!messages) {
+      return res.status(404).json({ error: `Chat not found for JID: ${chatId}` });
+    }
+
     let foundMsg = null;
     // Search from most recent to oldest
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -236,8 +254,8 @@ app.post('/find-poll-id', authenticate, async (req, res) => {
     }
     
     if (foundMsg) {
-      console.log(`Found poll message ID for "${title}": ${foundMsg.id._serialized}`);
-      res.json({ success: true, messageId: foundMsg.id._serialized });
+      console.log(`Found poll message ID for "${title}": ${foundMsg.id}`);
+      res.json({ success: true, messageId: foundMsg.id });
     } else {
       console.log(`Poll message for "${title}" not found in the last ${limit} messages.`);
       res.status(404).json({ error: `Poll message not found for title: ${title}` });
@@ -257,18 +275,27 @@ app.post('/get-poll-votes', authenticate, async (req, res) => {
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
     }
-    const msg = await client.getMessageById(messageId);
-    if (!msg) {
+    // Fetch raw votes from browser context directly to bypass getMessageById
+    const rawVotes = await client.pupPage.evaluate(async (messageId) => {
+      const msg = window.Store.Msg.get(messageId);
+      if (!msg) return null;
+      const votes = await msg.getPollVotes();
+      if (!votes) return [];
+      return votes.map(v => ({
+        voter: v.voter ? (typeof v.voter === 'object' ? v.voter._serialized : v.voter) : null,
+        selectedOptions: v.selectedOptions ? v.selectedOptions.map(o => ({ name: o.name })) : []
+      }));
+    }, messageId);
+
+    if (!rawVotes) {
       return res.status(404).json({ error: 'Message not found' });
     }
     
-    const votes = await msg.getPollVotes();
-    
     // Format votes by resolving voter LID/JID to standard phone number JID
-    const formattedVotes = await Promise.all(votes
+    const formattedVotes = await Promise.all(rawVotes
       .filter(v => v.selectedOptions && v.selectedOptions.length > 0)
       .map(async (v) => {
-        const voterId = typeof v.voter === 'object' ? v.voter._serialized : v.voter;
+        const voterId = v.voter;
         try {
           const contact = await client.getContactById(voterId);
           return {
@@ -301,23 +328,35 @@ app.post('/group-participants', authenticate, async (req, res) => {
     if (clientStatus !== 'CONNECTED') {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
     }
-    const chat = await client.getChatById(chatId);
-    if (!chat.isGroup) {
-      return res.status(400).json({ error: 'Chat is not a group' });
+    // Fetch participants directly from browser context to bypass getChatById
+    const participantIds = await client.pupPage.evaluate((chatId) => {
+      const chat = window.Store.Chat.get(chatId);
+      if (!chat) return null;
+      if (!chat.isGroup) return [];
+      const participants = chat.groupMetadata && chat.groupMetadata.participants 
+        ? chat.groupMetadata.participants.getModelsArray() 
+        : [];
+      return participants.map(p => p.id ? p.id._serialized : p.id);
+    }, chatId);
+
+    if (participantIds === null) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    if (participantIds.length === 0) {
+      return res.status(400).json({ error: 'Chat is not a group or has no participants' });
     }
     
-    const participants = chat.participants || [];
-    const list = await Promise.all(participants.map(async (p) => {
+    const list = await Promise.all(participantIds.map(async (jid) => {
       try {
-        const contact = await client.getContactById(p.id._serialized);
+        const contact = await client.getContactById(jid);
         return {
-          name: contact.pushname || contact.name || p.id.user,
+          name: contact.pushname || contact.name || jid.split('@')[0],
           whatsappId: contact.id._serialized
         };
       } catch (err) {
         return {
-          name: p.id.user,
-          whatsappId: p.id._serialized
+          name: jid.split('@')[0],
+          whatsappId: jid
         };
       }
     }));
@@ -340,82 +379,28 @@ app.post('/delete-message', authenticate, async (req, res) => {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
     }
     
-    const maxAttempts = 3;
-    let deletedSuccessfully = false;
-    let lastError = null;
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    // Execute deletion directly in the browser context to bypass getMessageById
+    const deleteResult = await client.pupPage.evaluate(async (messageId) => {
+      const msg = window.Store.Msg.get(messageId);
+      if (!msg) return null;
+      if (msg.type === 'revoked') return 'already_revoked';
+      
       try {
-        console.log(`Attempt ${attempt} of ${maxAttempts} to delete message ${messageId}...`);
-        
-        let msg = null;
-        try {
-          msg = await client.getMessageById(messageId);
-        } catch (fetchErr) {
-          console.log(`Message not found or fetch failed (likely already deleted): ${fetchErr.message}`);
-          deletedSuccessfully = true;
-          break;
-        }
-        
-        if (!msg) {
-          console.log(`Message not found (likely already deleted).`);
-          deletedSuccessfully = true;
-          break;
-        }
-        
-        if (msg.type === 'revoked') {
-          console.log(`Message is already revoked (deleted for everyone).`);
-          deletedSuccessfully = true;
-          break;
-        }
-        
-        // Try to delete for everyone (revoking)
-        try {
-          await msg.delete(true);
-          console.log(`Sent delete command (delete for everyone) for message ${messageId}.`);
-        } catch (deleteErr) {
-          console.warn('Delete for everyone failed, attempting local deletion (delete for me):', deleteErr.message);
-          // Fallback: delete only for me (necessary in self-chats)
-          await msg.delete(false);
-          deletedSuccessfully = true;
-          break;
-        }
-        
-        // Wait 1.5 seconds for the revocation state to propagate and sync
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Retrieve message again to verify revocation status
-        let checkMsg = null;
-        try {
-          checkMsg = await client.getMessageById(messageId);
-        } catch (checkErr) {
-          console.log(`Fetch after deletion failed, message is likely deleted: ${checkErr.message}`);
-          deletedSuccessfully = true;
-          break;
-        }
-        
-        if (!checkMsg || checkMsg.type === 'revoked') {
-          console.log(`Verification confirmed: message ${messageId} is deleted.`);
-          deletedSuccessfully = true;
-          break;
-        }
-        
-        console.warn(`Message ${messageId} still exists (type: ${checkMsg.type}). Retrying...`);
-        
-      } catch (err) {
-        console.error(`Deletion attempt ${attempt} failed with error:`, err);
-        lastError = err;
-        if (attempt < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+        await msg.delete(true);
+        return 'deleted';
+      } catch (e) {
+        await msg.delete(false);
+        return 'deleted_local';
       }
+    }, messageId);
+
+    if (!deleteResult) {
+      console.log(`Message not found (likely already deleted).`);
+      return res.json({ success: true });
     }
-    
-    if (deletedSuccessfully) {
-      res.json({ success: true });
-    } else {
-      res.status(500).json({ error: `Failed to delete message after ${maxAttempts} attempts. Last error: ${lastError ? lastError.message : 'Unknown'}` });
-    }
+
+    console.log(`Delete command completed with status: ${deleteResult} for message ${messageId}.`);
+    res.json({ success: true });
     
   } catch (error) {
     console.error('Error deleting message:', error);
