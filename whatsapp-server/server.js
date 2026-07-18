@@ -168,6 +168,11 @@ app.post('/send-message', authenticate, async (req, res) => {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
     }
     const msg = await client.sendMessage(chatId, text);
+    if (!msg || !msg.id || !msg.id._serialized) {
+      console.warn("WARNING: client.sendMessage succeeded but returned an undefined or invalid message object. Generating fallback messageId.");
+      const fallbackId = `fallback_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      return res.json({ messageId: fallbackId });
+    }
     res.json({ messageId: msg.id._serialized });
   } catch (error) {
     console.error('Error sending message:', error);
@@ -187,6 +192,11 @@ app.post('/send-poll', authenticate, async (req, res) => {
     // allowMultipleAnswers default is false (single answer)
     const poll = new Poll(title, options, { allowMultipleAnswers: false });
     const msg = await client.sendMessage(chatId, poll);
+    if (!msg || !msg.id || !msg.id._serialized) {
+      console.warn("WARNING: client.sendMessage for poll succeeded but returned an undefined or invalid message object. Generating fallback messageId.");
+      const fallbackId = `fallback_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      return res.json({ messageId: fallbackId });
+    }
     res.json({ messageId: msg.id._serialized });
   } catch (error) {
     console.error('Error sending poll:', error);
@@ -503,7 +513,11 @@ app.post('/generate-image', authenticate, async (req, res) => {
         console.log(`Sending image to JID: ${groupid}`);
         const msg = await client.sendMessage(groupid, media);
         
-        return res.json({ success: true, messageId: msg.id._serialized });
+        const messageId = msg && msg.id && msg.id._serialized ? msg.id._serialized : `fallback_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        if (!msg || !msg.id || !msg.id._serialized) {
+          console.warn("WARNING: client.sendMessage for media succeeded but returned an undefined or invalid message object. Generating fallback messageId.");
+        }
+        return res.json({ success: true, messageId: messageId });
       } catch (err) {
         console.error(`Attempt ${attempt} failed:`, err.message);
         lastError = err;
