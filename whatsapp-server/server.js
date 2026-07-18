@@ -219,7 +219,14 @@ app.post('/find-poll-id', authenticate, async (req, res) => {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
     }
     // Fetch raw messages directly from the browser context to bypass getChatById
-    const messages = await client.pupPage.evaluate((chatId, limit) => {
+    const messages = await client.pupPage.evaluate(async (chatId, limit) => {
+      const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 50; i++) {
+        if (window.Store && window.Store.Chat) break;
+        await wait(200);
+      }
+      if (!window.Store || !window.Store.Chat) return 'store_undefined';
+
       const chat = window.Store.Chat.get(chatId);
       if (!chat) return null;
       const msgs = chat.msgs.getModelsArray() || [];
@@ -234,6 +241,10 @@ app.post('/find-poll-id', authenticate, async (req, res) => {
         }
       }));
     }, chatId, parseInt(limit, 10) || 100);
+
+    if (messages === 'store_undefined') {
+      return res.status(503).json({ error: 'WhatsApp client internal store is initializing. Please retry in a moment.' });
+    }
 
     if (!messages) {
       return res.status(404).json({ error: `Chat not found for JID: ${chatId}` });
@@ -277,6 +288,13 @@ app.post('/get-poll-votes', authenticate, async (req, res) => {
     }
     // Fetch raw votes from browser context directly to bypass getMessageById
     const rawVotes = await client.pupPage.evaluate(async (messageId) => {
+      const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 50; i++) {
+        if (window.Store && window.Store.Msg) break;
+        await wait(200);
+      }
+      if (!window.Store || !window.Store.Msg) return 'store_undefined';
+
       const msg = window.Store.Msg.get(messageId);
       if (!msg) return null;
       const votes = await msg.getPollVotes();
@@ -286,6 +304,10 @@ app.post('/get-poll-votes', authenticate, async (req, res) => {
         selectedOptions: v.selectedOptions ? v.selectedOptions.map(o => ({ name: o.name })) : []
       }));
     }, messageId);
+
+    if (rawVotes === 'store_undefined') {
+      return res.status(503).json({ error: 'WhatsApp client internal store is initializing. Please retry in a moment.' });
+    }
 
     if (!rawVotes) {
       return res.status(404).json({ error: 'Message not found' });
@@ -329,7 +351,14 @@ app.post('/group-participants', authenticate, async (req, res) => {
       return res.status(503).json({ error: 'WhatsApp client is not connected' });
     }
     // Fetch participants directly from browser context to bypass getChatById
-    const participantIds = await client.pupPage.evaluate((chatId) => {
+    const participantIds = await client.pupPage.evaluate(async (chatId) => {
+      const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 50; i++) {
+        if (window.Store && window.Store.Chat) break;
+        await wait(200);
+      }
+      if (!window.Store || !window.Store.Chat) return 'store_undefined';
+
       const chat = window.Store.Chat.get(chatId);
       if (!chat) return null;
       if (!chat.isGroup) return [];
@@ -338,6 +367,10 @@ app.post('/group-participants', authenticate, async (req, res) => {
         : [];
       return participants.map(p => p.id ? p.id._serialized : p.id);
     }, chatId);
+
+    if (participantIds === 'store_undefined') {
+      return res.status(503).json({ error: 'WhatsApp client internal store is initializing. Please retry in a moment.' });
+    }
 
     if (participantIds === null) {
       return res.status(404).json({ error: 'Chat not found' });
@@ -381,6 +414,13 @@ app.post('/delete-message', authenticate, async (req, res) => {
     
     // Execute deletion directly in the browser context to bypass getMessageById
     const deleteResult = await client.pupPage.evaluate(async (messageId) => {
+      const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+      for (let i = 0; i < 50; i++) {
+        if (window.Store && window.Store.Msg) break;
+        await wait(200);
+      }
+      if (!window.Store || !window.Store.Msg) return 'store_undefined';
+
       const msg = window.Store.Msg.get(messageId);
       if (!msg) return null;
       if (msg.type === 'revoked') return 'already_revoked';
@@ -393,6 +433,10 @@ app.post('/delete-message', authenticate, async (req, res) => {
         return 'deleted_local';
       }
     }, messageId);
+
+    if (deleteResult === 'store_undefined') {
+      return res.status(503).json({ error: 'WhatsApp client internal store is initializing. Please retry in a moment.' });
+    }
 
     if (!deleteResult) {
       console.log(`Message not found (likely already deleted).`);
